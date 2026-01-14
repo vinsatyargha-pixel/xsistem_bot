@@ -1,0 +1,1 @@
+worker: python xsistem_bot.py
