@@ -1,17 +1,22 @@
 import telebot
 import random
 import string
+import time
 from telebot import types
+import logging
 
 # ========== CONFIG ==========
-TOKEN = "8087735462:AAGduMGrAaut2mlPanwlsCq7K-82fqIFuOo"
-CAPTAIN_GROUP_ID = -5720343562  # Ganti dengan ID group captain
+TOKEN = "8087735462:AAGduMGrAaut2mlPanwlsCq7K-82fqIFuOo"  # PASTIKAN TOKEN BENAR!
+CAPTAIN_GROUP_ID = -5720343562  # GANTI INI!
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 bot = telebot.TeleBot(TOKEN)
 
 # ========== FUNGSI GENERATE PASSWORD ==========
 def generate_password():
-    """Generate password mix huruf besar, kecil, angka"""
     upper = random.choice(string.ascii_uppercase)
     lower = random.choice(string.ascii_lowercase)
     numbers = ''.join(random.choice(string.digits) for _ in range(8))
@@ -19,134 +24,141 @@ def generate_password():
     random.shuffle(password_chars)
     return ''.join(password_chars)
 
-# ========== SIMPLE RESET FLOW ==========
-@bot.message_handler(func=lambda message: '/reset' in message.text.lower() or 
-                                           '/repass' in message.text.lower() or 
-                                           '/repas' in message.text.lower())
-def handle_reset_request(message):
-    """Tangkap semua format reset dari CS"""
-    cs_user = message.from_user
-    text = message.text or ""
-    
-    # Extract UserID dan Asset dari berbagai format
-    parts = text.strip().split()
-    
-    if len(parts) < 3:
-        bot.reply_to(message, "Format: /reset UserID Asset\nContoh: /reset Appank07 G200M")
-        return
-    
-    # Cari user_id dan asset (bisa di posisi mana saja)
-    user_id = parts[1]  # Biasanya setelah /reset
-    asset = parts[2] if len(parts) > 2 else "UNKNOWN"
-    
-    # Simpan data CS
-    cs_data = {
-        'id': cs_user.id,
-        'name': cs_user.full_name,
-        'username': cs_user.username
-    }
-    
-    # Buat keyboard untuk captain
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    btn_reset = types.InlineKeyboardButton("✅ Reset", callback_data=f"approve_{cs_user.id}_{user_id}_{asset}")
-    btn_reject = types.InlineKeyboardButton("❌ Tolak", callback_data=f"reject_{cs_user.id}")
-    markup.add(btn_reset, btn_reject)
-    
-    # Kirim ke group captain
-    bot.send_message(
-        CAPTAIN_GROUP_ID,
-        f"🔔 *RESET REQUEST*\n\n"
-        f"CS: {cs_user.full_name}\n"
-        f"Request: {text}\n\n"
-        f"Pilih tindakan:",
-        reply_markup=markup,
-        parse_mode='Markdown'
-    )
-    
-    # Konfirmasi ke CS
-    bot.reply_to(message, "✅ Request sudah diteruskan ke Captain!")
+# ========== TRIGGER RESET ==========
+@bot.message_handler(func=lambda m: any(cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']))
+def handle_reset(message):
+    try:
+        text = message.text.strip()
+        parts = text.split()
+        
+        if len(parts) < 3:
+            bot.reply_to(message, "Format: /reset UserID Asset\nContoh: /reset Appank07 G200M")
+            return
+        
+        # Ambil user_id dan asset (bisa dari berbagai format)
+        user_id = parts[1]
+        asset = parts[2]
+        
+        # Hapus tanda "-" jika ada
+        user_id = user_id.replace('-', '').strip()
+        asset = asset.replace('-', '').strip()
+        
+        logger.info(f"Reset request from {message.from_user.id}: {user_id} {asset}")
+        
+        # Kirim ke group captain
+        markup = types.InlineKeyboardMarkup()
+        markup.add(
+            types.InlineKeyboardButton("✅ Reset", callback_data=f"approve_{message.from_user.id}_{user_id}_{asset}"),
+            types.InlineKeyboardButton("❌ Tolak", callback_data=f"reject_{message.from_user.id}")
+        )
+        
+        bot.send_message(
+            CAPTAIN_GROUP_ID,
+            f"🔔 *RESET REQUEST*\n\n"
+            f"CS: {message.from_user.full_name} (@{message.from_user.username})\n"
+            f"UserID: `{user_id}`\n"
+            f"Asset: `{asset}`\n\n"
+            f"Pilih:",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+        
+        bot.reply_to(message, "✅ Request dikirim ke Captain!")
+        
+    except Exception as e:
+        logger.error(f"Error in handle_reset: {e}")
+        bot.reply_to(message, f"❌ Error: {str(e)}")
 
-# ========== HANDLE PHOTO (BUKTI TRANSFER) ==========
+# ========== HANDLE PHOTO ==========
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    """Tangani bukti transfer yang dikirim setelah/before request"""
-    # Cukup teruskan foto ke group captain
-    bot.forward_message(CAPTAIN_GROUP_ID, message.chat.id, message.message_id)
-    bot.reply_to(message, "📸 Bukti transfer telah diteruskan ke Captain!")
+    try:
+        bot.forward_message(CAPTAIN_GROUP_ID, message.chat.id, message.message_id)
+        bot.reply_to(message, "📸 Bukti diteruskan!")
+    except Exception as e:
+        logger.error(f"Error forwarding photo: {e}")
 
 # ========== CAPTAIN APPROVAL ==========
 @bot.callback_query_handler(func=lambda call: call.data.startswith('approve_'))
-def approve_request(call):
-    """Captain pilih RESET"""
-    data_parts = call.data.split('_')
-    cs_user_id = int(data_parts[1])
-    user_id = data_parts[2]
-    asset = data_parts[3] if len(data_parts) > 3 else "UNKNOWN"
-    
-    # Generate password baru
-    new_password = generate_password()
-    
-    # FORMAT SESUAI PERMINTAAN:
-    # user_ID - Asset
-    # Password baru :
-    message_to_cs = f"{user_id} - {asset}\nPassword baru : {new_password}"
-    
-    # Kirim ke CS
-    bot.send_message(cs_user_id, message_to_cs)
-    
-    # Update pesan di group captain
-    bot.edit_message_text(
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        text=f"✅ RESET APPROVED untuk {user_id}\nPassword telah dikirim ke CS."
-    )
-    
-    bot.answer_callback_query(call.id, "✅ Password dikirim ke CS")
+def approve(call):
+    try:
+        data = call.data.split('_')
+        cs_id = int(data[1])
+        user_id = data[2]
+        asset = data[3]
+        
+        new_password = generate_password()
+        
+        # Format: user_ID - Asset
+        # Password baru :
+        message_text = f"{user_id} - {asset}\nPassword baru : {new_password}"
+        
+        # Kirim ke CS
+        bot.send_message(cs_id, message_text)
+        
+        # Update pesan
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=f"✅ APPROVED\n{user_id} - {asset}\nPassword: {new_password}"
+        )
+        
+        bot.answer_callback_query(call.id, "✅ Password dikirim")
+        
+    except Exception as e:
+        logger.error(f"Error in approve: {e}")
+        bot.answer_callback_query(call.id, "❌ Error")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('reject_'))
-def reject_request(call):
-    """Captain pilih TOLAK"""
-    cs_user_id = int(call.data.split('_')[1])
-    
-    # Kirim ke CS
-    bot.send_message(cs_user_id, "Permintaan anda ditolak Captain !!")
-    
-    # Update pesan di group captain
-    bot.edit_message_text(
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        text=f"❌ REQUEST DITOLAK\nCS sudah dinotifikasi."
-    )
-    
-    bot.answer_callback_query(call.id, "❌ Request ditolak")
+def reject(call):
+    try:
+        cs_id = int(call.data.split('_')[1])
+        
+        # Kirim ke CS
+        bot.send_message(cs_id, "Permintaan anda ditolak Captain !!")
+        
+        # Update pesan
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=f"❌ REJECTED\nDitolak oleh Captain"
+        )
+        
+        bot.answer_callback_query(call.id, "❌ Request ditolak")
+        
+    except Exception as e:
+        logger.error(f"Error in reject: {e}")
+        bot.answer_callback_query(call.id, "❌ Error")
 
 # ========== START ==========
-@bot.message_handler(commands=['start', 'help'])
+@bot.message_handler(commands=['start'])
 def start(message):
-    help_text = """
-    🤖 *SIMPLE RESET BOT*
+    bot.reply_to(message, 
+        "🤖 *Simple Reset Bot*\n\n"
+        "Kirim: `/reset UserID Asset`\n"
+        "Contoh: `/reset Appank07 G200M`\n\n"
+        "Request akan ke Captain untuk approval.",
+        parse_mode='Markdown'
+    )
 
-    *CARA PAKAI:*
-    Kirim: `/reset UserID Asset`
-    
-    *Contoh:*
-    `/reset Appank07 G200M`
-    `/reset Player123 G500M`
-    
-    *Format lainnya diterima:*
-    `/repass UserID Asset`
-    `/repas UserID - Asset`
-    
-    *Bisa kirim bukti transfer* (foto) sebelum/sesudah request.
-    
-    Request akan diteruskan ke Captain untuk approval.
-    """
-    bot.reply_to(message, help_text, parse_mode='Markdown')
-
-# ========== RUN BOT ==========
+# ========== MAIN ==========
 if __name__ == "__main__":
-    print("🤖 Simple Reset Bot Started!")
-    print(f"📢 Captain Group: {CAPTAIN_GROUP_ID}")
-    print("🔧 Ready to handle reset requests...")
-    bot.polling(none_stop=True)
-
+    logger.info("🚀 Starting Simple Reset Bot...")
+    logger.info(f"Captain Group ID: {CAPTAIN_GROUP_ID}")
+    
+    try:
+        # Cek bot info dulu
+        me = bot.get_me()
+        logger.info(f"Bot: @{me.username} ({me.id})")
+        
+        # Polling dengan parameter aman
+        bot.polling(
+            none_stop=True,
+            interval=1,
+            timeout=30,
+            allowed_updates=["message", "callback_query"]
+        )
+        
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        time.sleep(5)
