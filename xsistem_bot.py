@@ -6,7 +6,7 @@ from telebot import types
 import logging
 
 # ========== CONFIG ==========
-TOKEN = "8087735462:AAGduMGrAaut2mlPanwlsCq7K-82fqIFuOo"  # PASTIKAN TOKEN BENAR!
+TOKEN = "8087735462:AAGII-XvO3hJy3YgDd3b0vjiIHjnQCn4Ej4"  # PASTIKAN TOKEN BENAR!
 CAPTAIN_GROUP_ID = -5720343562  # GANTI INI!
 
 # Setup logging
@@ -162,3 +162,4 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         time.sleep(5)
+
