@@ -44,11 +44,13 @@ def init_db():
     print("✅ Database siap!")
 
 def generate_password():
-    # Pool karakter yang diizinkan
-    chars = string.ascii_letters + string.digits  # A-Z a-z 0-9
-    # Generate 9 karakter random
-    password = ''.join(random.choice(chars) for _ in range(9))
-    return password
+    upper = random.choice(string.ascii_uppercase)
+    lower = random.choice(string.ascii_lowercase)
+    numbers = ''.join(random.choice(string.digits) for _ in range(3))
+    special = random.choice('!@#$%^&*')
+    password_chars = list(upper + lower + numbers + special)
+    random.shuffle(password_chars)
+    return ''.join(password_chars)
 
 # ========== SINGLE COMMAND FLOW ==========
 @bot.message_handler(commands=['start', 'help'])
@@ -87,7 +89,6 @@ def handle_reset(message):
                 "❌ *Format salah!*\n\n"
                 "Gunakan: `/reset ID_AKUN NAMA_GAME`\n"
                 "Contoh: `/reset Tampias77 G200M`\n\n"
-                "Bisa juga kirim foto sebagai bukti deposit.",
                 parse_mode='Markdown'
             )
             return
@@ -116,7 +117,6 @@ def handle_reset(message):
             f"👤 ID: `{account_id}`\n"
             f"🎮 Game: {game_name}\n\n"
             "⏳ Menunggu approval admin...\n\n"
-            "📸 *Bisa kirim bukti deposit (foto) sekarang juga*",
             parse_mode='Markdown'
         )
         
@@ -478,7 +478,3 @@ if __name__ == "__main__":
         # Keep container alive
         while True:
             time.sleep(60)
-
-
-
-
