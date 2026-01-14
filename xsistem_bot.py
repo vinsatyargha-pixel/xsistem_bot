@@ -457,24 +457,27 @@ if __name__ == "__main__":
     print("=" * 50)
 
     bot.polling(none_stop=True)
-    if __name__ == "__main__":
+    # ========== START BOT ==========
+if __name__ == "__main__":
+    print("=" * 50)
+    print("🚀 Starting X-Sistem Bot v3.0")
+    print("=" * 50)
+    
     try:
-        print("=" * 50)
-        print("🚀 Attempting to start bot...")
-        print(f"Token length: {len(TOKEN) if TOKEN else 'TOKEN EMPTY!'}")
-        print(f"Admin ID: {ADMIN_CHAT_ID}")
-        print("=" * 50)
-        
         init_db()
-        print("✅ Database initialized")
+        print(f"✅ Database siap!")
+        print(f"✅ Admin ID: {ADMIN_CHAT_ID}")
+        print(f"📁 Upload folder: {UPLOAD_FOLDER}")
+        print("🤖 Bot is running! Press Ctrl+C to stop.")
+        print("=" * 50)
         
-        print("🤖 Starting bot polling...")
         bot.polling(none_stop=True, timeout=60)
         
     except Exception as e:
-        print(f"❌ CRITICAL ERROR: {str(e)}")
+        print(f"❌ ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
-        # Keep container alive for debugging
+        import time
+        # Keep container alive
         while True:
-            time.sleep(10)
+            time.sleep(60)
