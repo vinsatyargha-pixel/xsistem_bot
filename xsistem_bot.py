@@ -1,10 +1,10 @@
 import telebot
-import os
 import random
 import string
 
-# ===== CONFIG =====
-TOKEN = os.environ["TOKEN"]
+# ===== CONFIG (TEST ONLY) =====
+TOKEN = "8087735462:AAGduMGrAaut2mlPanwlsCq7K-82fqIFuOo"
+ADMIN_CHAT_ID = 5720343562
 bot = telebot.TeleBot(TOKEN)
 
 TRIGGERS = ("reset", "repas", "repass")
@@ -14,12 +14,11 @@ def generate_password(length=9):
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(length))
 
-# ===== UNIVERSAL HANDLER =====
+# ===== UNIVERSAL HANDLER (TEXT + FOTO) =====
 @bot.message_handler(content_types=["text", "photo"])
 def universal_handler(message):
     text = ""
 
-    # Ambil teks dari message atau caption foto
     if message.text:
         text = message.text
     elif message.caption:
@@ -29,8 +28,7 @@ def universal_handler(message):
 
     text_lower = text.lower()
 
-    # Cek trigger
-    if not any(trigger in text_lower for trigger in TRIGGERS):
+    if not any(t in text_lower for t in TRIGGERS):
         return
 
     parts = text.split(maxsplit=1)
@@ -55,5 +53,5 @@ def universal_handler(message):
 
 # ===== START BOT =====
 if __name__ == "__main__":
-    print("🚀 Bot running (support text + image)...")
+    print("🚀 Bot TEST running...")
     bot.polling(none_stop=True, timeout=60)
