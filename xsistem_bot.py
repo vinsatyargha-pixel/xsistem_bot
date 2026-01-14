@@ -3,9 +3,7 @@ import sqlite3
 import random
 import string
 import os
-from datetime import datetime
 from telebot import types
-import time
 
 # ========== CONFIGURASI ==========
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -31,11 +29,9 @@ def init_db():
         cs_username TEXT,
         target_account_id TEXT DEFAULT 'AUTO',
         game_name TEXT DEFAULT 'GAME',
-        request_time DATETIME DEFAULT CURRENT_TIMESTAMP,
         status TEXT DEFAULT 'pending',
         new_password TEXT,
         admin_id INTEGER,
-        process_time DATETIME,
         photo_path TEXT
     )
     ''')
@@ -261,3 +257,4 @@ if __name__ == "__main__":
         import time
         while True:
             time.sleep(60)
+
