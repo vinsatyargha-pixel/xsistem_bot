@@ -14,7 +14,7 @@ DATABASE = "xsistem.db"
 UPLOAD_FOLDER = "bukti_deposit"
 # =================================
 
-bot = telebot.TeleBot(8087735462:AAGduMGrAaut2mlPanwlsCq7K-82fqIFuOo)
+bot = telebot.TeleBot(TOKEN)
 
 # Buat folder untuk simpan gambar
 if not os.path.exists(UPLOAD_FOLDER):
@@ -481,4 +481,5 @@ if __name__ == "__main__":
         # Keep container alive
         while True:
             time.sleep(60)
+
 
