@@ -176,19 +176,19 @@ def approve_request(call):
         SET status = 'completed',
             new_password = ?,
             admin_id = ?,
-            process_time = CURRENT_TIMESTAMP
         WHERE request_id = ?
         ''', (new_password, call.from_user.id, request_id))
         conn.commit()
         
         # Kirim password ke CS
-        bot.send_message(cs_user_id,
-            f"✅ *PASSWORD READY!*\n\n"
-            f"📋 Kode: `{request_id}`\n"
-            f"🔐 Password: `{new_password}`\n\n"
-            f"⚠️ Berikan ke user segera!",
-            parse_mode='Markdown'
-        )
+     bot.send_message(
+    cs_user_id,
+    f"✅ *PASSWORD READY!*\n\n"
+    f"👤 ID: `{user_id}`\n"  # Ganti Kode dengan ID user
+    f"🔐 Password: `{new_password}`\n\n"
+    f"⚠️ Berikan ke user segera!",
+    parse_mode='Markdown'
+)
         
         # Update pesan admin
         bot.edit_message_text(
@@ -257,4 +257,5 @@ if __name__ == "__main__":
         import time
         while True:
             time.sleep(60)
+
 
