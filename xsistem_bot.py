@@ -84,14 +84,14 @@ def handle_reset(message):
         # Parse command: /reset ID GAME
         parts = message.text.split(maxsplit=2)
         
-       if len(parts) < 3:
-    bot.reply_to(message, 
-        "❌ *Format salah!*\n\n"
-        "Gunakan: `/reset ID_AKUN NAMA_GAME`\n"
-        "Contoh: `/reset Tampias77 G200M`",  # ← TIDAK ADA KOMA DI BARIS TERAKHIR
-        parse_mode='Markdown'
-    )
-    return
+        if len(parts) < 3:
+            bot.reply_to(message, 
+                "❌ *Format salah!*\n\n"
+                "Gunakan: `/reset ID_AKUN NAMA_GAME`\n"
+                "Contoh: `/reset Tampias77 G200M`",
+                parse_mode='Markdown'
+            )
+            return
         
         account_id = parts[1]
         game_name = parts[2]
@@ -116,7 +116,7 @@ def handle_reset(message):
             f"📋 Kode: `{request_id}`\n"
             f"👤 ID: `{account_id}`\n"
             f"🎮 Game: {game_name}\n\n"
-            "⏳ Menunggu approval admin...\n\n"
+            "⏳ Menunggu approval admin...",
             parse_mode='Markdown'
         )
         
@@ -478,4 +478,5 @@ if __name__ == "__main__":
         # Keep container alive
         while True:
             time.sleep(60)
+
 
