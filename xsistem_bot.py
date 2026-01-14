@@ -455,4 +455,26 @@ if __name__ == "__main__":
     print(f"📁 Upload folder: {UPLOAD_FOLDER}")
     print("🤖 Bot is running! Press Ctrl+C to stop.")
     print("=" * 50)
+
     bot.polling(none_stop=True)
+    if __name__ == "__main__":
+    try:
+        print("=" * 50)
+        print("🚀 Attempting to start bot...")
+        print(f"Token length: {len(TOKEN) if TOKEN else 'TOKEN EMPTY!'}")
+        print(f"Admin ID: {ADMIN_CHAT_ID}")
+        print("=" * 50)
+        
+        init_db()
+        print("✅ Database initialized")
+        
+        print("🤖 Starting bot polling...")
+        bot.polling(none_stop=True, timeout=60)
+        
+    except Exception as e:
+        print(f"❌ CRITICAL ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Keep container alive for debugging
+        while True:
+            time.sleep(10)
