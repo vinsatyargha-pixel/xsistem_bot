@@ -4,8 +4,8 @@ import string
 from telebot import types
 
 # ========== CONFIG ==========
-TOKEN = "YOUR_BOT_TOKEN_HERE"
-CAPTAIN_GROUP_ID = -1001234567890  # Ganti dengan ID group captain
+TOKEN = "8087735462:AAGduMGrAaut2mlPanwlsCq7K-82fqIFuOo"
+CAPTAIN_GROUP_ID = -5720343562  # Ganti dengan ID group captain
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -149,3 +149,4 @@ if __name__ == "__main__":
     print(f"📢 Captain Group: {CAPTAIN_GROUP_ID}")
     print("🔧 Ready to handle reset requests...")
     bot.polling(none_stop=True)
+
