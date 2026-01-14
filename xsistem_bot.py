@@ -44,13 +44,11 @@ def init_db():
     print("✅ Database siap!")
 
 def generate_password():
-    upper = random.choice(string.ascii_uppercase)
-    lower = random.choice(string.ascii_lowercase)
-    numbers = ''.join(random.choice(string.digits) for _ in range(3))
-    special = random.choice('!@#$%^&*')
-    password_chars = list(upper + lower + numbers + special)
-    random.shuffle(password_chars)
-    return ''.join(password_chars)
+    # Pool karakter yang diizinkan
+    chars = string.ascii_letters + string.digits  # A-Z a-z 0-9
+    # Generate 9 karakter random
+    password = ''.join(random.choice(chars) for _ in range(9))
+    return password
 
 # ========== SINGLE COMMAND FLOW ==========
 @bot.message_handler(commands=['start', 'help'])
@@ -480,6 +478,7 @@ if __name__ == "__main__":
         # Keep container alive
         while True:
             time.sleep(60)
+
 
 
 
