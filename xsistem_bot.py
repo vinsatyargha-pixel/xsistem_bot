@@ -34,9 +34,17 @@ def handle_request(message):
     parts = text.split(maxsplit=1)
     if len(parts) < 2:
         bot.reply_to(
-            message,
-            "❌ Format salah!\n\nGunakan:\nreset USER_ID\n\nContoh:\nreset TEST123"
-        )
+    message,
+    "❌ Format salah!\n\n"
+    "Gunakan:\n"
+    "REPASS\n\n"
+    "USER_ID - ASSET\n"
+    "Nama Bank | Nama Rek | Nomor Rek\n"
+    "Bank Tujuan DEPOSIT\n"
+    "Wallet:\n"
+    "Officer:\n"
+)
+
         return
 
     user_asset = parts[1]
@@ -92,3 +100,4 @@ def handle_action(call):
 if __name__ == "__main__":
     print("🚀 Bot running (approval mode)...")
     bot.polling(none_stop=True, timeout=60)
+
