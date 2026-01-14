@@ -130,16 +130,16 @@ def handle_reset(message):
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo_anytime(message):
-    """Handle foto yang dikirim kapan saja (relate ke request terakhir)"""
+    """Handle foto yang dikirim kapan saja"""
     user_id = message.from_user.id
     
-    # Cari request terakhir dari user ini yang masih pending
+    # Cari request PENDING terakhir dari user ini
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
     cursor.execute('''
     SELECT request_id, target_account_id, game_name, photo_path
     FROM reset_requests 
-    WHERE cs_user_id = ? AND status = 'pending' 
+    WHERE cs_user_id = ? AND status = 'pending'
     ORDER BY request_time DESC LIMIT 1
     ''', (user_id,))
     
@@ -148,17 +148,16 @@ def handle_photo_anytime(message):
     if result:
         request_id, account_id, game_name, existing_photo = result
         
-        # Jika sudah ada foto sebelumnya, skip
+        # Jika sudah ada foto sebelumnya
         if existing_photo:
             bot.reply_to(message, "⚠️ Request ini sudah ada bukti deposit sebelumnya.")
             conn.close()
             return
         
-        # Download foto
+        # Download dan simpan foto
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        # Simpan foto
         timestamp = int(time.time())
         photo_filename = f"{request_id}_{timestamp}.jpg"
         photo_path = os.path.join(UPLOAD_FOLDER, photo_filename)
@@ -481,5 +480,6 @@ if __name__ == "__main__":
         # Keep container alive
         while True:
             time.sleep(60)
+
 
 
