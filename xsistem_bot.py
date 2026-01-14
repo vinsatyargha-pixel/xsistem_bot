@@ -1,103 +1,163 @@
-import telebot
-from telebot import types
+import os
+import re
 import random
 import string
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-# ===== CONFIG (TEST ONLY) =====
-TOKEN = "8087735462:AAGduMGrAaut2mlPanwlsCq7K-82fqIFuOo"
-CAPTAIN_USERNAME = "@vingeance"   # yang di-tag
-bot = telebot.TeleBot(TOKEN)
+# ========== CONFIG ==========
+BOT_TOKEN = "8087735462:AAGduMGrAaut2mlPanwlsCq7K-82fqIFuOo"  # Ganti dengan token botmu
+CAPTAIN_CHAT_ID = -5720343562  # Ganti dengan chat ID captain/group admin
 
-TRIGGERS = ("reset", "repas", "repass")
+# ========== TRIGGER KATA ==========
+RESET_TRIGGERS = ["/repass", "/reset", "/repas"]
 
-# ===== PASSWORD GENERATOR =====
-def generate_password(length=9):
-    chars = string.ascii_letters + string.digits
-    return ''.join(random.choice(chars) for _ in range(length))
+# ========== FUNGSI GENERATE PASSWORD ==========
+def generate_random_password(length=10):
+    uppercase = string.ascii_uppercase
+    lowercase = string.ascii_lowercase
+    digits = string.digits
+    
+    password_chars = [
+        random.choice(uppercase),
+        random.choice(lowercase),
+        random.choice(digits)
+    ]
+    
+    all_chars = uppercase + lowercase + digits
+    for _ in range(length - 3):
+        password_chars.append(random.choice(all_chars))
+    
+    random.shuffle(password_chars)
+    return ''.join(password_chars)
 
-# ===== HANDLE TEXT + PHOTO =====
-@bot.message_handler(content_types=["text", "photo"])
-def handle_request(message):
-    text = ""
-
-    if message.text:
-        text = message.text
-    elif message.caption:
-        text = message.caption
-    else:
-        return
-
-    text_lower = text.lower()
-    if not any(t in text_lower for t in TRIGGERS):
-        return
-
-    parts = text.split(maxsplit=1)
-    if len(parts) < 2:
-        bot.reply_to(
-    message,
-    "❌ Format salah!\n\n"
-    "Gunakan:\n"
-    "REPASS\n\n"
-    "USER_ID - ASSET\n"
-    "Nama Bank | Nama Rek | Nomor Rek\n"
-    "Bank Tujuan DEPOSIT\n"
-    "Wallet:\n"
-    "Officer:\n"
-)
-
-        return
-
-    user_asset = parts[1]
-
-    # Inline button
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    btn_ok = types.InlineKeyboardButton(
-        "✅ Resetkan", callback_data=f"ok|{user_asset}"
-    )
-    btn_no = types.InlineKeyboardButton(
-        "❌ Tolak", callback_data=f"no|{user_asset}"
-    )
-    markup.add(btn_ok, btn_no)
-
-    response = (
-        f"🔔 {CAPTAIN_USERNAME}\n\n"
-        f"🧾 *Permintaan Reset Password*\n"
-        f"USER ID : `{user_asset}`\n\n"
-        "Silakan pilih tindakan:"
-    )
-
-    bot.reply_to(message, response, parse_mode="Markdown", reply_markup=markup)
-
-# ===== CALLBACK HANDLER =====
-@bot.callback_query_handler(func=lambda call: call.data.startswith(("ok|", "no|")))
-def handle_action(call):
-    action, user_asset = call.data.split("|", 1)
-
-    if action == "ok":
-        password = generate_password()
-        text = (
-            "✅ PASSWORD READY!\n"
-            f"USER ID : {user_asset}\n\n"
-            f"🔐 Password: `{password}`\n\n"
-            "⚠️ Berikan ke user segera!"
+# ========== HANDLER PESAN DARI CS ==========
+# ========== HANDLER PESAN DARI CS ==========
+async def handle_cs_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message
+    text = message.text or message.caption or ""
+    
+    if any(trigger in text.lower() for trigger in RESET_TRIGGERS):
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Reset", callback_data="captain_reset"),
+                InlineKeyboardButton("❌ Tolak", callback_data="captain_reject")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # Kirim ke group captain
+        await context.bot.send_message(
+            chat_id=CAPTAIN_CHAT_ID,
+            text=f"🔔 *Permintaan Reset Password*\n\n"
+                 f"CS: {update.effective_user.full_name}\n"
+                 f"Pesan:\n`{text[:300]}`\n\n"
+                 f"Silakan pilih tindakan:",
+            reply_markup=reply_markup,
+            parse_mode='Markdown',
+            reply_to_message_id=message.message_id if message.photo else None
         )
-    else:
-        text = (
-            "❌ REQUEST DITOLAK\n"
-            f"USER ID : {user_asset}"
+        
+        await message.reply_text("✅ Permintaan sudah diteruskan ke captain.")
+        
+        # Kirim ke group captain
+        await context.bot.send_message(
+            chat_id=CAPTAIN_CHAT_ID,
+            text=f"🔔 *Permintaan Reset Password*\n\n"
+                 f"CS: {update.effective_user.full_name}\n"
+                 f"Pesan:\n`{text[:300]}`\n\n"
+                 f"Silakan pilih tindakan:",
+            reply_markup=reply_markup,
+            parse_mode='Markdown',
+            reply_to_message_id=message.message_id if message.photo else None
+        )
+        
+        await message.reply_text("✅ Permintaan sudah diteruskan ke captain.")
+
+# ========== HANDLER PILIHAN CAPTAIN ==========
+async def handle_captain_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    if update.effective_chat.id != CAPTAIN_CHAT_ID:
+        return
+    
+    original_message = query.message.reply_to_message
+    original_text = original_message.text or original_message.caption or ""
+    
+    if query.data == "captain_reset":
+        patterns = [
+            r'(\w+)[\s\-]+([A-Za-z0-9]+)',
+            r'(\w+)\s*-\s*([A-Za-z0-9]+)',
+        ]
+        
+        user_id = "UNKNOWN"
+        asset = "UNKNOWN"
+        
+        for pattern in patterns:
+            match = re.search(pattern, original_text)
+            if match:
+                user_id = match.group(1).strip()
+                asset = match.group(2).strip()
+                break
+        
+        new_password = generate_random_password()
+        
+        # Format untuk CS
+        response_to_cs = (
+            f"✅ *PASSWORD READY!*\n\n"
+            f"👤 ID: `{user_id}`\n"
+            f"🔐 Password: `{new_password}`\n\n"
+            f"⚠️ Berikan ke user segera!"
+        )
+        
+        # Kirim ke CS
+        await context.bot.send_message(
+            chat_id=CS_USER_ID,
+            text=response_to_cs,
+            parse_mode='Markdown'
+        )
+        
+        # Update pesan di group captain
+        await query.edit_message_text(
+            text=f"✅ *Reset Disetujui*\n\n"
+                 f"User: `{user_id}`\n"
+                 f"Asset: `{asset}`\n"
+                 f"Password baru sudah dikirim ke CS.",
+            parse_mode='Markdown'
+        )
+    
+    elif query.data == "captain_reject":
+        await query.edit_message_text(
+            text="❌ *Permintaan Ditolak*\n\n"
+                 "CS dimohon memberi notice ke user:\n\n"
+                 "⚠️ *Permintaan anda ditolak Captain !!*",
+            parse_mode='Markdown'
+        )
+        
+        # Notifikasi ke CS
+        await context.bot.send_message(
+            chat_id=CS_USER_ID,
+            text="❌ Permintaan reset password DITOLAK oleh Captain.\n"
+                 "Berikan notice ke user: *Permintaan anda ditolak Captain !!*",
+            parse_mode='Markdown'
         )
 
-    bot.edit_message_text(
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        text=text,
-        parse_mode="Markdown"
-    )
+# ========== START COMMAND ==========
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Bot Reset Password siap!")
 
-    bot.answer_callback_query(call.id)
+# ========== MAIN ==========
+def main():
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Handler
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handle_cs_message))
+    application.add_handler(CallbackQueryHandler(handle_captain_choice))
+    
+    print("Bot sedang berjalan...")
+    application.run_polling()
 
-# ===== START BOT =====
 if __name__ == "__main__":
-    print("🚀 Bot running (approval mode)...")
-    bot.polling(none_stop=True, timeout=60)
-
+    main()
