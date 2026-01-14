@@ -8,13 +8,13 @@ from telebot import types
 import time
 
 # ========== CONFIGURASI ==========
-TOKEN = os.environ.get("TOKEN", "MASUKKAN_TOKEN_ANDA_DISINI")  # Railway akan pakai environment variable
+TOKEN = os.environ.get("TOKEN", "8087735462:AAGduMGrAaut2mlPanwlsCq7K-82fqIFuOo")  # Railway akan pakai environment variable
 ADMIN_CHAT_ID = int(os.environ.get("ADMIN_CHAT_ID", "5720343562"))
 DATABASE = "xsistem.db"
 UPLOAD_FOLDER = "bukti_deposit"
 # =================================
 
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(8087735462:AAGduMGrAaut2mlPanwlsCq7K-82fqIFuOo)
 
 # Buat folder untuk simpan gambar
 if not os.path.exists(UPLOAD_FOLDER):
@@ -481,3 +481,4 @@ if __name__ == "__main__":
         # Keep container alive
         while True:
             time.sleep(60)
+
