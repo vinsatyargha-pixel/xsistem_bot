@@ -8,7 +8,7 @@ from telebot import types
 import time
 
 # ========== CONFIGURASI ==========
-TOKEN = os.environ.get("TOKEN", "8087735462:AAGduMGrAaut2mlPanwlsCq7K-82fqIFuOo")  # Railway akan pakai environment variable
+TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = int(os.environ.get("ADMIN_CHAT_ID", "5720343562"))
 DATABASE = "xsistem.db"
 UPLOAD_FOLDER = "bukti_deposit"
@@ -29,8 +29,8 @@ def init_db():
         request_id TEXT UNIQUE,
         cs_user_id INTEGER,
         cs_username TEXT,
-        target_account_id TEXT,
-        game_name TEXT,
+        target_account_id TEXT DEFAULT 'AUTO',
+        game_name TEXT DEFAULT 'GAME',
         request_time DATETIME DEFAULT CURRENT_TIMESTAMP,
         status TEXT DEFAULT 'pending',
         new_password TEXT,
@@ -44,156 +44,52 @@ def init_db():
     print("✅ Database siap!")
 
 def generate_password():
-    upper = random.choice(string.ascii_uppercase)
-    lower = random.choice(string.ascii_lowercase)
+    # 9 karakter: huruf besar, kecil, angka
+    uppercase = ''.join(random.choice(string.ascii_uppercase) for _ in range(3))
+    lowercase = ''.join(random.choice(string.ascii_lowercase) for _ in range(3))
     numbers = ''.join(random.choice(string.digits) for _ in range(3))
-    special = random.choice('!@#$%^&*')
-    password_chars = list(upper + lower + numbers + special)
+    password_chars = list(uppercase + lowercase + numbers)
     random.shuffle(password_chars)
     return ''.join(password_chars)
 
-# ========== SINGLE COMMAND FLOW ==========
-@bot.message_handler(commands=['start', 'help'])
-def start_command(message):
-    help_text = """
-    🤖 *X-SISTEM BOT - Reset Password*
-
-    *CARA PAKAI:*
-    `/reset ID_AKUN NAMA_GAME`
-    
-    *Contoh:*
-    `/reset Tampias77 G200M`
-
-    *Bisa juga kirim bukti deposit (foto)*
-    Kirim foto setelah command /reset
-    
-    *Cek Status:*
-    `/status KODE`
-    
-    *Admin:* `/admin`
-    """
-    bot.send_message(message.chat.id, help_text, parse_mode='Markdown')
-
-@bot.message_handler(commands=['reset'])
-def handle_reset(message):
-    """Handle command /reset dengan atau tanpa foto"""
+# ========== TRIGGER WORDS ==========
+@bot.message_handler(func=lambda message: any(word in message.text.lower() for word in ['repas', 'repass', 'reset']))
+def handle_trigger(message):
+    """Handle trigger words: repas, repass, reset"""
     user_id = message.from_user.id
     cs_user = message.from_user
     
     try:
-        # Parse command: /reset ID GAME
-        parts = message.text.split(maxsplit=2)
-        
-        if len(parts) < 3:
-            bot.reply_to(message, 
-                "❌ *Format salah!*\n\n"
-                "Gunakan: `/reset ID_AKUN NAMA_GAME`\n"
-                "Contoh: `/reset Tampias77 G200M`",
-                parse_mode='Markdown'
-            )
-            return
-        
-        account_id = parts[1]
-        game_name = parts[2]
-        
         # Generate request ID
         request_id = f"X{random.randint(1000, 9999)}"
         
-        # Simpan ke database (tanpa foto dulu)
+        # Simpan ke database
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
         cursor.execute('''
         INSERT INTO reset_requests 
-        (request_id, cs_user_id, cs_username, target_account_id, game_name)
-        VALUES (?, ?, ?, ?, ?)
-        ''', (request_id, cs_user.id, cs_user.username, account_id, game_name))
+        (request_id, cs_user_id, cs_username)
+        VALUES (?, ?, ?)
+        ''', (request_id, cs_user.id, cs_user.username))
         conn.commit()
         conn.close()
         
         # Konfirmasi ke user
         bot.reply_to(message,
             f"✅ *REQUEST DITERIMA!*\n\n"
-            f"📋 Kode: `{request_id}`\n"
-            f"👤 ID: `{account_id}`\n"
-            f"🎮 Game: {game_name}\n\n"
+            f"📋 Kode: `{request_id}`\n\n"
             "⏳ Menunggu approval admin...",
             parse_mode='Markdown'
         )
         
-        # Langsung kirim notifikasi ke admin
-        send_to_admin(request_id, account_id, game_name, cs_user.username)
+        # Kirim notifikasi ke admin
+        send_to_admin(request_id, cs_user.username)
         
     except Exception as e:
         bot.reply_to(message, f"❌ Error: {str(e)}")
 
-@bot.message_handler(content_types=['photo'])
-def handle_photo_anytime(message):
-    """Handle foto yang dikirim kapan saja"""
-    user_id = message.from_user.id
-    
-    # Cari request PENDING terakhir dari user ini
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    cursor.execute('''
-    SELECT request_id, target_account_id, game_name, photo_path
-    FROM reset_requests 
-    WHERE cs_user_id = ? AND status = 'pending'
-    ORDER BY request_time DESC LIMIT 1
-    ''', (user_id,))
-    
-    result = cursor.fetchone()
-    
-    if result:
-        request_id, account_id, game_name, existing_photo = result
-        
-        # Jika sudah ada foto sebelumnya
-        if existing_photo:
-            bot.reply_to(message, "⚠️ Request ini sudah ada bukti deposit sebelumnya.")
-            conn.close()
-            return
-        
-        # Download dan simpan foto
-        file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        
-        timestamp = int(time.time())
-        photo_filename = f"{request_id}_{timestamp}.jpg"
-        photo_path = os.path.join(UPLOAD_FOLDER, photo_filename)
-        
-        with open(photo_path, 'wb') as new_file:
-            new_file.write(downloaded_file)
-        
-        # Update database
-        cursor.execute('''
-        UPDATE reset_requests SET photo_path = ? WHERE request_id = ?
-        ''', (photo_path, request_id))
-        conn.commit()
-        
-        # Konfirmasi ke user
-        bot.reply_to(message,
-            f"✅ *BUKTI DEPOSIT DITERIMA!*\n\n"
-            f"📋 Kode: `{request_id}`\n"
-            f"👤 ID: `{account_id}`\n"
-            f"🎮 Game: {game_name}\n"
-            f"📸 Bukti: ✅ Tersedia\n\n"
-            "Request diperbarui dengan bukti.",
-            parse_mode='Markdown'
-        )
-        
-        # Update notifikasi ke admin
-        update_admin_with_photo(request_id, photo_path)
-        
-    else:
-        bot.reply_to(message, 
-            "❌ Tidak ada request pending.\n"
-            "Kirim dulu: `/reset ID GAME`",
-            parse_mode='Markdown'
-        )
-    
-    conn.close()
-
-def send_to_admin(request_id, account_id, game_name, cs_username):
-    """Kirim notifikasi awal ke admin"""
+def send_to_admin(request_id, cs_username):
+    """Kirim notifikasi ke admin"""
     markup = types.InlineKeyboardMarkup(row_width=2)
     btn_reset = types.InlineKeyboardButton("✅ RESET", callback_data=f"ok_{request_id}")
     btn_decline = types.InlineKeyboardButton("❌ TOLAK", callback_data=f"no_{request_id}")
@@ -203,39 +99,65 @@ def send_to_admin(request_id, account_id, game_name, cs_username):
         f"🔄 *REQUEST BARU*\n"
         f"━━━━━━━━━━━━━━\n"
         f"📋 Kode: `{request_id}`\n"
-        f"👤 ID: `{account_id}`\n"
-        f"🎮 Game: {game_name}\n"
         f"🛡️ CS: @{cs_username}\n"
-        f"📸 Bukti: ❌ Belum ada\n"
-        f"⏰ Waktu: {datetime.now().strftime('%H:%M:%S')}\n\n"
-        f"*User bisa kirim foto nanti*"
+        f"⏰ Waktu: {datetime.now().strftime('%H:%M:%S')}"
     )
     
     bot.send_message(ADMIN_CHAT_ID, admin_msg, parse_mode='Markdown', reply_markup=markup)
 
-def update_admin_with_photo(request_id, photo_path):
-    """Update admin dengan foto yang baru dikirim"""
+# ========== HANDLE FOTO ==========
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    """Handle foto yang dikirim kapan saja"""
+    user_id = message.from_user.id
+    
+    # Cari request terakhir dari user ini yang masih pending
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
     cursor.execute('''
-    SELECT target_account_id, game_name, cs_username
-    FROM reset_requests WHERE request_id = ?
-    ''', (request_id,))
+    SELECT request_id, photo_path
+    FROM reset_requests 
+    WHERE cs_user_id = ? AND status = 'pending' 
+    ORDER BY request_time DESC LIMIT 1
+    ''', (user_id,))
     
     result = cursor.fetchone()
-    conn.close()
     
     if result:
-        account_id, game_name, cs_username = result
+        request_id, existing_photo = result
+        
+        # Jika sudah ada foto sebelumnya
+        if existing_photo:
+            conn.close()
+            return
+        
+        # Download foto
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        
+        # Simpan foto
+        timestamp = int(time.time())
+        photo_filename = f"{request_id}_{timestamp}.jpg"
+        photo_path = os.path.join(UPLOAD_FOLDER, photo_filename)
+        
+        with open(photo_path, 'wb') as new_file:
+            new_file.write(downloaded_file)
+        
+        # Update database
+        cursor.execute('''UPDATE reset_requests SET photo_path = ? WHERE request_id = ?''', 
+                      (photo_path, request_id))
+        conn.commit()
         
         # Kirim foto ke admin
         with open(photo_path, 'rb') as photo:
             bot.send_photo(
                 ADMIN_CHAT_ID, 
                 photo,
-                caption=f"📸 *BUKTI DITAMBAHKAN*\nRequest: {request_id}\nID: {account_id}\nCS: @{cs_username}",
+                caption=f"📸 *BUKTI*\nKode: {request_id}\nCS: @{cs_username}",
                 parse_mode='Markdown'
             )
+        
+    conn.close()
 
 # ========== APPROVAL SYSTEM ==========
 @bot.callback_query_handler(func=lambda call: call.data.startswith("ok_"))
@@ -246,16 +168,11 @@ def approve_request(call):
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
     
-    # Ambil data request
-    cursor.execute('''
-    SELECT cs_user_id, target_account_id, game_name, photo_path 
-    FROM reset_requests WHERE request_id = ?
-    ''', (request_id,))
-    
+    cursor.execute('''SELECT cs_user_id FROM reset_requests WHERE request_id = ?''', (request_id,))
     result = cursor.fetchone()
     
     if result:
-        cs_user_id, account_id, game_name, photo_path = result
+        cs_user_id = result[0]
         
         # Update database
         cursor.execute('''
@@ -266,39 +183,26 @@ def approve_request(call):
             process_time = CURRENT_TIMESTAMP
         WHERE request_id = ?
         ''', (new_password, call.from_user.id, request_id))
-        
         conn.commit()
         
         # Kirim password ke CS
-        message_text = (
+        bot.send_message(cs_user_id,
             f"✅ *PASSWORD READY!*\n\n"
             f"📋 Kode: `{request_id}`\n"
-            f"👤 ID: `{account_id}`\n"
-            f"🎮 Game: {game_name}\n"
             f"🔐 Password: `{new_password}`\n\n"
-            f"⚠️ Berikan ke user segera!"
+            f"⚠️ Berikan ke user segera!",
+            parse_mode='Markdown'
         )
-        
-        # Jika ada foto, kirim juga
-        if photo_path and os.path.exists(photo_path):
-            try:
-                with open(photo_path, 'rb') as photo:
-                    bot.send_photo(cs_user_id, photo, caption=message_text, parse_mode='Markdown')
-            except:
-                bot.send_message(cs_user_id, message_text, parse_mode='Markdown')
-        else:
-            bot.send_message(cs_user_id, message_text, parse_mode='Markdown')
         
         # Update pesan admin
         bot.edit_message_text(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
-            text=f"✅ SELESAI\nKode: {request_id}\nPassword: {new_password}",
-            reply_markup=None,
-            parse_mode='Markdown'
+            text="✅ SELESAI",
+            reply_markup=None
         )
         
-        bot.answer_callback_query(call.id, f"Password: {new_password}")
+        bot.answer_callback_query(call.id, "Password dikirim")
     
     conn.close()
 
@@ -309,15 +213,12 @@ def decline_request(call):
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
     
-    cursor.execute('''
-    SELECT cs_user_id FROM reset_requests WHERE request_id = ?
-    ''', (request_id,))
-    
+    cursor.execute('''SELECT cs_user_id FROM reset_requests WHERE request_id = ?''', (request_id,))
     result = cursor.fetchone()
     
     if result:
         cs_user_id = result[0]
-        bot.send_message(cs_user_id, f"❌ Request {request_id} DITOLAK oleh admin.")
+        bot.send_message(cs_user_id, f"❌ Request {request_id} DITOLAK")
     
     cursor.execute('''
     UPDATE reset_requests 
@@ -333,150 +234,30 @@ def decline_request(call):
     bot.edit_message_text(
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
-        text=f"❌ DITOLAK\nKode: {request_id}",
+        text="❌ DITOLAK",
         reply_markup=None
     )
     
     bot.answer_callback_query(call.id, "Request ditolak")
 
-# ========== COMMAND LAINNYA ==========
-@bot.message_handler(commands=['status'])
-def check_status(message):
-    try:
-        request_id = message.text.split()[1]
-        
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
-        cursor.execute('''
-        SELECT request_id, target_account_id, status, new_password
-        FROM reset_requests WHERE request_id = ?
-        ''', (request_id,))
-        
-        result = cursor.fetchone()
-        conn.close()
-        
-        if not result:
-            bot.reply_to(message, "❌ Kode tidak ditemukan.")
-            return
-        
-        req_id, account_id, status, password = result
-        
-        status_msg = {
-            'pending': '⏳ Menunggu',
-            'completed': '✅ Selesai',
-            'rejected': '❌ Ditolak'
-        }.get(status, status)
-        
-        response = (
-            f"📊 *STATUS REQUEST*\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"📋 Kode: `{req_id}`\n"
-            f"👤 ID: `{account_id}`\n"
-            f"📈 Status: {status_msg}\n"
-        )
-        
-        if password:
-            response += f"🔐 Password: `{password}`\n"
-            
-        bot.reply_to(message, response, parse_mode='Markdown')
-        
-    except:
-        bot.reply_to(message, "Format: /status [kode]\nContoh: /status X1234")
-
-@bot.message_handler(commands=['admin', 'pending'])
-def admin_commands(message):
-    if message.from_user.id != ADMIN_CHAT_ID:
-        bot.reply_to(message, "❌ Hanya admin!")
-        return
-    
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    
-    if 'pending' in message.text:
-        cursor.execute('''
-        SELECT request_id, target_account_id, cs_username, request_time
-        FROM reset_requests WHERE status = 'pending'
-        ORDER BY request_time ASC
-        ''')
-        
-        requests = cursor.fetchall()
-        
-        if not requests:
-            bot.reply_to(message, "✅ Tidak ada request pending.")
-        else:
-            response = "⏳ *REQUEST PENDING:*\n━━━━━━━━━━━━━━\n"
-            for req in requests:
-                req_id, account_id, cs_user, req_time = req
-                response += f"📋 `{req_id}`\n👤 `{account_id}`\n🛡️ @{cs_user}\n⏰ {req_time}\n━━━━━━━━━━━━━━\n"
-            
-            bot.reply_to(message, response, parse_mode='Markdown')
-    else:
-        cursor.execute("SELECT COUNT(*) FROM reset_requests WHERE status = 'pending'")
-        pending = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM reset_requests")
-        total = cursor.fetchone()[0]
-        
-        bot.reply_to(message,
-            f"👑 *ADMIN PANEL*\n\n"
-            f"⏳ Pending: {pending} request\n"
-            f"📊 Total: {total} request\n\n"
-            f"Commands:\n"
-            f"/pending - Lihat request pending\n"
-            f"/status [kode] - Cek status",
-            parse_mode='Markdown'
-        )
-    
-    conn.close()
-
-# ========== FOR GRUP SUPPORT ==========
-@bot.message_handler(func=lambda message: message.chat.type in ['group', 'supergroup'] and '/reset' in message.text)
-def handle_group_reset(message):
-    """Handle jika ada yang ketik /reset di grup"""
-    user = message.from_user
-    bot.reply_to(message,
-        f"👋 Hai @{user.username}!\n\n"
-        "Untuk request reset password:\n"
-        "1. Chat langsung ke @Xsistem_Bot\n"
-        "2. Kirim perintah: `/reset ID_AKUN NAMA_GAME`\n\n"
-        "⚠️ *Password akan dikirim via chat pribadi*",
-        parse_mode='Markdown',
-        reply_to_message_id=message.message_id
-    )
-
+# ========== START BOT ==========
 if __name__ == "__main__":
     print("=" * 50)
-    print("🚀 Starting X-Sistem Bot v3.0")
-    print("=" * 50)
-    init_db()
-    print(f"✅ Admin ID: {ADMIN_CHAT_ID}")
-    print(f"📁 Upload folder: {UPLOAD_FOLDER}")
-    print("🤖 Bot is running! Press Ctrl+C to stop.")
-    print("=" * 50)
-
-    bot.polling(none_stop=True)
-    # ========== START BOT ==========
-if __name__ == "__main__":
-    print("=" * 50)
-    print("🚀 Starting X-Sistem Bot v3.0")
+    print("🚀 Starting X-Sistem Bot (Trigger Mode)")
     print("=" * 50)
     
     try:
         init_db()
-        print(f"✅ Database siap!")
         print(f"✅ Admin ID: {ADMIN_CHAT_ID}")
-        print(f"📁 Upload folder: {UPLOAD_FOLDER}")
-        print("🤖 Bot is running! Press Ctrl+C to stop.")
+        print("🤖 Bot is running! Trigger words: repas, repass, reset")
         print("=" * 50)
         
-        bot.polling(none_stop=True, timeout=60)
+        bot.polling(none_stop=True, timeout=30)
         
     except Exception as e:
         print(f"❌ ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         import time
-        # Keep container alive
         while True:
             time.sleep(60)
-
-
