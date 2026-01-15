@@ -79,7 +79,7 @@ def handle_reset_only_text(message):
         parts = text.split()
         
         if len(parts) < 3:
-            bot.reply_to(message, "Format: /reset ID ASSET\nContoh: /reset kitty95 F20")
+            bot.reply_to(message, "Format: /reset ID ASSET\nContoh: /reset MAGNIX XLY")
             return
         
         user_id = parts[1]
@@ -173,4 +173,5 @@ if __name__ == "__main__":
     print("🤖 BOT STARTED - IGNORING ALL MEDIA")
     print("📱 Hanya proses text command /reset, /repass, /repas")
     bot.polling(none_stop=True)
+
 
