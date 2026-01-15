@@ -11,24 +11,61 @@ def buat_password():
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(10))
 
-@bot.message_handler(commands=['format'])
-def show_format(message):
-    format_contoh = (
-        "📋 *CONTOH FORMAT:*\n\n"
-        "/repas ID ASSET\n"
-        "BANK MEMBER\n"
-        "BANK TUJUAN\n"
-        "WALLET :\n"
-        "OFFICER :\n\n"
-        "───────────────\n"
-        "*Contoh:*\n"
-        "/repas kitty95 F20\n"
-        "BRI\n"
-        "BCA\n"
-        "WALLET : DANA\n"
-        "OFFICER : yoriko"
-    )
-    bot.reply_to(message, format_contoh, parse_mode='Markdown')
+@bot.message_handler(content_types=['text', 'photo'])
+def handle_reset(message):
+    try:
+        text = None
+
+        if message.text:
+            text = message.text
+        elif message.caption:
+            text = message.caption
+        else:
+            return
+
+        if not any(cmd in text.lower() for cmd in ['/reset', '/repass', '/repas']):
+            return
+
+        parts = text.strip().split()
+
+        if len(parts) < 3:
+            bot.reply_to(
+                message,
+                "Format: /reset ID ASSET\nContoh: /reset kitty95 F20"
+            )
+            return
+
+        user_id = parts[1]
+        asset = parts[2]
+
+        print(f"📩 Reset: {user_id} {asset} dari @{message.from_user.username}")
+
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton(
+                "✅ Reset",
+                callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"
+            ),
+            types.InlineKeyboardButton(
+                "❌ Tolak",
+                callback_data=f"no_{message.from_user.id}"
+            )
+        )
+
+        bot.reply_to(
+            message,
+            f"🔔 *RESET REQUEST*\n\n"
+            f"👤 CS: {message.from_user.full_name}\n"
+            f"🆔 User: `{user_id}`\n"
+            f"🎮 Asset: `{asset}`\n\n"
+            f"**PILIH:**",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
 
 # ========== CRITICAL FIX ==========
 # HANYA handle text messages yang BUKAN forward dan BUKAN caption foto
@@ -136,3 +173,4 @@ if __name__ == "__main__":
     print("🤖 BOT STARTED - IGNORING ALL MEDIA")
     print("📱 Hanya proses text command /reset, /repass, /repas")
     bot.polling(none_stop=True)
+
