@@ -2,88 +2,70 @@ import telebot
 import random
 import string
 from telebot import types
-import time
 
-# ========== CONFIG ==========
 TOKEN = "8087735462:AAGII-XvO3hJy3YgDd3b0vjiIHjnQCn4Ej4"
-CAPTAIN_ID = 5720343562  # ID kamu
+# CAPTAIN_GROUP_ID = -1001234567890  # ID GRUP RESET PASSWORD
 
 bot = telebot.TeleBot(TOKEN)
 
-# ========== FUNGSI ==========
 def buat_password():
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(10))
 
-# ========== RESET HANDLER ==========
+# ========== HANDLER DI GRUP ==========
 @bot.message_handler(func=lambda m: m.text and any(
     cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']
 ))
-def handle_reset(m):
+def handle_reset_grup(message):
+    """Handle reset command DI GRUP"""
     try:
         # Parse message
-        text = m.text.strip()
+        text = message.text.strip()
         parts = text.split()
         
         if len(parts) < 3:
-            bot.reply_to(m, "❌ Format: `/reset UserID Asset`\nContoh: `/reset kitty95 g20`", parse_mode='Markdown')
+            bot.reply_to(message, "Format: /reset UserID Asset")
             return
         
         user_id = parts[1]
         asset = parts[2]
         
-        print(f"📩 Reset dari @{m.from_user.username}: {user_id} {asset}")
+        print(f"📩 Reset di grup: {user_id} {asset} dari @{message.from_user.username}")
         
-        # Simpan data CS untuk callback
-        cs_data = {
-            'id': m.from_user.id,
-            'name': m.from_user.full_name,
-            'username': m.from_user.username
-        }
-        
-        # Buat tombol untuk Captain
+        # Buat tombol Reset/Tolak DI GRUP
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
-            types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{m.from_user.id}_{user_id}_{asset}"),
-            types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{m.from_user.id}")
+            types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
+            types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
         )
         
-        # Kirim ke Captain
-        bot.send_message(
-            CAPTAIN_ID,
+        # Reply di grup dengan tombol
+        bot.reply_to(
+            message,
             f"🔔 *RESET REQUEST*\n\n"
-            f"👤 **CS:** {cs_data['name']}\n"
-            f"📱 **Username:** @{cs_data['username'] or 'N/A'}\n"
-            f"🆔 **User:** `{user_id}`\n"
-            f"🎮 **Asset:** `{asset}`\n\n"
-            f"⏳ **Pilih aksi:**",
+            f"👤 CS: {message.from_user.full_name}\n"
+            f"🆔 User: `{user_id}`\n"
+            f"🎮 Asset: `{asset}`\n\n"
+            f"**PILIH:**",
             reply_markup=markup,
             parse_mode='Markdown'
         )
         
-        # ✅ KONFIRMASI KE CS (INI YANG BENAR!)
-        bot.reply_to(m, "✅ *Request sudah dikirim ke Captain!*\nTunggu approval...", parse_mode='Markdown')
-        
     except Exception as e:
         print(f"❌ Error: {e}")
-        bot.reply_to(m, "❌ Error processing request")
+        bot.reply_to(message, "❌ Error!")
 
-# ========== PHOTO HANDLER ==========
+# ========== PHOTO DI GRUP ==========
 @bot.message_handler(content_types=['photo'])
-def handle_photo(m):
-    """HANYA FORWARD FOTO KE CAPTAIN, TANPA REPLY KE CS!"""
-    try:
-        # Hanya forward ke Captain, TIDAK REPLY KE CS
-        bot.forward_message(CAPTAIN_ID, m.chat.id, m.message_id)
-        print(f"📸 Foto diteruskan dari @{m.from_user.username}")
-        # ⚠️ JANGAN REPLY APA-APA KE CS!
-    except Exception as e:
-        print(f"❌ Error forwarding photo: {e}")
-        # Jangan reply error ke CS juga!
+def handle_photo_grup(message):
+    """Foto di grup cuma forward ke reply atau ignore"""
+    # Biarin aja, nggak perlu di-handle khusus
+    pass
 
 # ========== CALLBACK HANDLER ==========
 @bot.callback_query_handler(func=lambda call: True)
-def handle_callback(call):
+def handle_callback_grup(call):
+    """Handle pilihan Reset/Tolak DI GRUP"""
     try:
         if call.data.startswith('ok_'):
             # Format: ok_CS_ID_USER_ID_ASSET
@@ -92,23 +74,26 @@ def handle_callback(call):
             
             password = buat_password()
             
-            # ✅ FORMAT YANG DIMINTA:
+            # FORMAT YANG DIMINTA:
             # user_ID - Asset
             # Password baru :
-            message_to_cs = f"{user_id} - {asset}\nPassword baru : {password}"
+            message_text = f"{user_id} - {asset}\nPassword baru : {password}"
             
-            # Kirim password ke CS
-            bot.send_message(cs_id, message_to_cs)
+            # Kirim password DI GRUP (reply ke message asli)
+            bot.send_message(
+                call.message.chat.id,
+                message_text,
+                reply_to_message_id=call.message.reply_to_message.message_id
+            )
             
-            # Update pesan di Captain
+            # Update tombol jadi approved
             bot.edit_message_text(
-                chat_id=call.message.chat.id,
-                message_id=call.message.message_id,
-                text=f"✅ *RESET DISETUJUI*\n\n"
-                     f"User: `{user_id}`\n"
-                     f"Asset: `{asset}`\n"
-                     f"Password: `{password}`\n\n"
-                     f"✅ Sudah dikirim ke CS.",
+                f"✅ *RESET DISETUJUI*\n\n"
+                f"User: `{user_id}`\n"
+                f"Asset: `{asset}`\n"
+                f"Password: `{password}`",
+                call.message.chat.id,
+                call.message.message_id,
                 parse_mode='Markdown'
             )
             
@@ -117,48 +102,39 @@ def handle_callback(call):
         elif call.data.startswith('no_'):
             cs_id = int(call.data.split('_')[1])
             
-            # Kirim notifikasi penolakan ke CS
-            bot.send_message(cs_id, "Permintaan anda ditolak Captain !!")
+            # Kirim notifikasi penolakan DI GRUP
+            bot.send_message(
+                call.message.chat.id,
+                "❌ Permintaan ditolak Captain !!",
+                reply_to_message_id=call.message.reply_to_message.message_id
+            )
             
-            # Update pesan di Captain
+            # Update tombol jadi rejected
             bot.edit_message_text(
-                chat_id=call.message.chat.id,
-                message_id=call.message.message_id,
-                text=f"❌ *REQUEST DITOLAK*\n\n"
-                     f"CS sudah dinotifikasi.",
+                f"❌ *REQUEST DITOLAK*",
+                call.message.chat.id,
+                call.message.message_id,
                 parse_mode='Markdown'
             )
             
-            bot.answer_callback_query(call.id, "❌ Request ditolak")
+            bot.answer_callback_query(call.id, "❌ Ditolak")
             
     except Exception as e:
         print(f"❌ Callback error: {e}")
         bot.answer_callback_query(call.id, "❌ Error")
 
-# ========== START COMMAND ==========
+# ========== START ==========
 @bot.message_handler(commands=['start', 'help'])
-def start(m):
-    bot.reply_to(m,
-        "🤖 *Reset Password Bot*\n\n"
-        "Kirim: `/reset UserID Asset`\n"
-        "Contoh: `/reset kitty95 g20`\n\n"
-        "Bisa kirim bukti transfer (foto) setelahnya.",
-        parse_mode='Markdown'
-    )
+def start(message):
+    if message.chat.type in ['group', 'supergroup']:
+        bot.reply_to(message,
+            "🤖 *Reset Password Bot*\n\n"
+            "CS kirim: `/reset UserID Asset`\n"
+            "Contoh: `/reset kitty95 g20`\n\n"
+            "Captain pilih: Reset atau Tolak",
+            parse_mode='Markdown'
+        )
 
-# ========== MAIN ==========
 if __name__ == "__main__":
-    print("=" * 50)
-    print("🤖 BOT STARTING...")
-    print(f"👑 Captain ID: {CAPTAIN_ID}")
-    print("=" * 50)
-    
-    # Hapus webhook jika ada
-    try:
-        bot.remove_webhook()
-        print("✅ Webhook cleared")
-    except:
-        pass
-    
-    # Polling
-    bot.polling(none_stop=True, timeout=30)
+    print("🤖 Bot for GROUP started!")
+    bot.polling(none_stop=True)
