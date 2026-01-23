@@ -52,7 +52,8 @@ def parse_report_text(text):
 @bot.message_handler(commands=['format'])
 def handle_format_command(message):
     """Command /format untuk tampilkan semua format"""
-    format_text = """
+    try:
+        format_text = """
 📋 *(PILIH SALAH SATU KATEGORI - JANGAN TYPO)*
 
 *REPORT CROSSBANK*
@@ -83,35 +84,41 @@ AMOUNT: 5000000
 CASE: Fraud
 OFFICER: John Doe
 """
-    bot.reply_to(message, format_text, parse_mode='Markdown')
+        bot.reply_to(message, format_text, parse_mode='Markdown')
+    except:
+        pass  # Abaikan jika gagal
 
 @bot.message_handler(commands=['report'])
 def handle_report_command(message):
     """Command /report untuk pilih jenis report"""
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(
-        types.InlineKeyboardButton("📋 CROSSBANK", callback_data="report_crossbank"),
-        types.InlineKeyboardButton("⏳ PENDINGAN", callback_data="report_pendingan"),
-        types.InlineKeyboardButton("🔄 PROCESS PENDINGAN", callback_data="report_process_pendingan"),
-        types.InlineKeyboardButton("❌ MISTAKE", callback_data="report_mistake"),
-        types.InlineKeyboardButton("↩️ REFUND", callback_data="report_refund"),
-        types.InlineKeyboardButton("💰 FEE", callback_data="report_fee")
-    )
-    
-    bot.reply_to(
-        message,
-        "📊 *PILIH JENIS REPORT:*",
-        reply_markup=markup,
-        parse_mode='Markdown'
-    )
+    try:
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("📋 CROSSBANK", callback_data="report_crossbank"),
+            types.InlineKeyboardButton("⏳ PENDINGAN", callback_data="report_pendingan"),
+            types.InlineKeyboardButton("🔄 PROCESS PENDINGAN", callback_data="report_process_pendingan"),
+            types.InlineKeyboardButton("❌ MISTAKE", callback_data="report_mistake"),
+            types.InlineKeyboardButton("↩️ REFUND", callback_data="report_refund"),
+            types.InlineKeyboardButton("💰 FEE", callback_data="report_fee")
+        )
+        
+        bot.reply_to(
+            message,
+            "📊 *PILIH JENIS REPORT:*",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+    except:
+        pass  # Abaikan jika gagal
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('report_'))
 def handle_report_type(call):
     """Handle pemilihan jenis report"""
-    report_type = call.data.replace('report_', '')
-    
-    formats = {
-        'crossbank': """
+    try:
+        report_type = call.data.replace('report_', '')
+        
+        formats = {
+            'crossbank': """
 📋 *FORMAT REPORT CROSSBANK*
 
 REPORT CROSSBANK
@@ -123,8 +130,8 @@ NO TICKET: TKT789
 AMOUNT: 5000000
 CASE: Fraud
 OFFICER: John Doe""",
-        
-        'pendingan': """
+            
+            'pendingan': """
 ⏳ *FORMAT REPORT PENDINGAN*
 
 REPORT PENDINGAN
@@ -136,8 +143,8 @@ NO TICKET: TKT789
 AMOUNT: 5000000
 CASE: Input Pendingan Deposit
 OFFICER: John Doe""",
-        
-        'process_pendingan': """
+            
+            'process_pendingan': """
 🔄 *FORMAT REPORT PROCESS PENDINGAN*
 
 REPORT PROCESS PENDINGAN
@@ -149,8 +156,8 @@ NO TICKET: TKT789
 AMOUNT: 5000000
 CASE: Proses Pendingan Deposit
 OFFICER: John Doe""",
-        
-        'mistake': """
+            
+            'mistake': """
 ❌ *FORMAT REPORT MISTAKE*
 
 REPORT MISTAKE
@@ -162,8 +169,8 @@ NO TICKET: TKT789
 AMOUNT: 5000000
 CASE: Kesalahan Input Data
 OFFICER: John Doe""",
-        
-        'refund': """
+            
+            'refund': """
 ↩️ *FORMAT REPORT REFUND*
 
 REPORT REFUND
@@ -175,8 +182,8 @@ NO TICKET: TKT789
 AMOUNT: 5000000
 CASE: Pengembalian Dana
 OFFICER: John Doe""",
-        
-        'fee': """
+            
+            'fee': """
 💰 *FORMAT REPORT FEE*
 
 REPORT FEE
@@ -188,15 +195,20 @@ NO TICKET: TKT789
 AMOUNT: 5000000
 CASE: Biaya Admin/Operasional
 OFFICER: John Doe"""
-    }
-    
-    bot.edit_message_text(
-        formats[report_type] + "\n\n*Kirim pesan dengan format di atas*",
-        call.message.chat.id,
-        call.message.message_id,
-        parse_mode='Markdown'
-    )
-    bot.answer_callback_query(call.id, f"Format {report_type.upper()}")
+        }
+        
+        bot.edit_message_text(
+            formats[report_type] + "\n\n*Kirim pesan dengan format di atas*",
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode='Markdown'
+        )
+        bot.answer_callback_query(call.id, f"Format {report_type.upper()}")
+    except:
+        try:
+            bot.answer_callback_query(call.id, "⚠️ Message sudah dihapus")
+        except:
+            pass
 
 # ========== UNIVERSAL REPORT HANDLER ==========
 def handle_report_generic(message, report_type):
@@ -215,10 +227,7 @@ def handle_report_generic(message, report_type):
         ]
         
         if not any(text.startswith(t) for t in valid_types):
-            error_msg = f"❌ *TYPOS DETECTED!*\nGunakan salah satu:\n"
-            error_msg += "\n".join([f"• {t}" for t in valid_types])
-            bot.reply_to(message, error_msg, parse_mode='Markdown')
-            return
+            return  # Abaikan typo, biarkan agent edit sendiri
         
         # Parse data
         data = parse_report_text(text)
@@ -233,20 +242,17 @@ def handle_report_generic(message, report_type):
         missing = [field for field in required if not data.get(field)]
         
         if missing:
-            bot.reply_to(message, f"❌ Data kurang: {', '.join(missing).replace('_', ' ').upper()}")
+            # Tidak perlu reply, biarkan agent lengkapi sendiri
             return
         
         # Simpan ke Google Sheets
         success, result = save_crossbank_report(data)
         
         if success:
-            # RESPONSE SIMPLE ✅
             bot.reply_to(message, "✅ REPORT BERHASIL DISIMPAN!")
-        else:
-            bot.reply_to(message, f"❌ Gagal simpan: {result}")
-            
-    except Exception as e:
-        bot.reply_to(message, f"❌ Error: {str(e)}")
+        # Tidak perlu else, biarkan fail silent
+    except:
+        pass  # ABORT SEMUA ERROR, BIARKAN FLOW LANGSUNG
 
 # ========== SPECIFIC REPORT HANDLERS ==========
 @bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT CROSSBANK'))
@@ -284,13 +290,12 @@ def handle_reset_only_text(message):
         parts = text.split()
         
         if len(parts) < 3:
-            bot.reply_to(message, "Format: /reset ID ASSET\nContoh: /reset MAGNIX XLY")
-            return
+            return  # Abaikan format salah
         
         user_id = parts[1]
         asset = parts[2]
         
-        print(f"📩 Reset TEXT: {user_id} {asset}")
+        print(f"📩 Reset: {user_id} {asset}")
         
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
@@ -301,38 +306,37 @@ def handle_reset_only_text(message):
         bot.reply_to(
             message,
             f"🔔 *RESET REQUEST*\n\n"
-            f"👤 CS: {message.from_user.full_name}\n"
+            f"👤 CS: {message.from_user.first_name}\n"
             f"🆔 User: `{user_id}`\n"
             f"🎮 Asset: `{asset}`\n\n"
             f"**PILIH:**",
             reply_markup=markup,
             parse_mode='Markdown'
         )
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
+    except:
+        pass  # Abaikan error
 
 @bot.message_handler(content_types=['photo', 'document', 'video', 'audio', 'voice'])
 def ignore_all_media(message):
+    """ABAIKAN SEMUA MEDIA"""
     pass
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('ok_') or call.data.startswith('no_'))
 def handle_reset_callback(call):
+    """Handle reset callback - TANPA REPLY TO MESSAGE"""
     try:
         if call.data.startswith('ok_'):
             _, cs_id, user_id, asset = call.data.split('_')
-            cs_id = int(cs_id)
             
             password = buat_password()
             
-            message_text = f"{user_id} - {asset}\nPassword baru : {password}"
-            
+            # KIRIM PASSWORD (TANPA REPLY)
             bot.send_message(
                 call.message.chat.id,
-                message_text,
-                reply_to_message_id=call.message.reply_to_message.message_id
+                f"{user_id} - {asset}\nPassword baru : {password}"
             )
             
+            # UPDATE TOMBOL
             bot.edit_message_text(
                 f"✅ *RESET DISETUJUI*\n\n"
                 f"User: `{user_id}`\n"
@@ -346,35 +350,36 @@ def handle_reset_callback(call):
             bot.answer_callback_query(call.id, "✅ Password dikirim")
             
         elif call.data.startswith('no_'):
-            cs_id = int(call.data.split('_')[1])
-            
+            # KIRIM PESAN TOLAK (TANPA REPLY)
             bot.send_message(
                 call.message.chat.id,
-                "❌ Permintaan ditolak Captain !!",
-                reply_to_message_id=call.message.reply_to_message.message_id
+                "❌ Permintaan ditolak Captain !!"
             )
             
             bot.edit_message_text(
-                f"❌ *REQUEST DITOLAK*",
+                "❌ *REQUEST DITOLAK*",
                 call.message.chat.id,
                 call.message.message_id,
                 parse_mode='Markdown'
             )
             
             bot.answer_callback_query(call.id, "❌ Ditolak")
-            
-    except Exception as e:
-        print(f"❌ Callback error: {e}")
-        bot.answer_callback_query(call.id, "❌ Error")
+    except:
+        try:
+            bot.answer_callback_query(call.id, "⚠️ Action gagal")
+        except:
+            pass
 
 if __name__ == "__main__":
-    print("🤖 X-SISTEM BOT STARTED")
-    print("📱 /reset [ID] [ASSET] - Reset password")
-    print("📊 /report - Pilih jenis report")
-    print("📋 /format - Tampilkan semua format")
-    print("⏳ REPORT PENDINGAN - Input pendingan deposit")
-    print("🔄 REPORT PROCESS PENDINGAN - Proses pendingan")
-    print("❌ REPORT MISTAKE - Kesalahan input")
-    print("↩️ REPORT REFUND - Pengembalian dana")
-    print("💰 REPORT FEE - Biaya admin/operasional")
-    bot.polling(none_stop=True)
+    print("🤖 X-SISTEM BOT - SILENT MODE")
+    print("📱 /reset [ID] [ASSET]")
+    print("📊 /report - Pilih jenis")
+    print("📋 /format - Tampilkan format")
+    print("🚫 Auto abort jika error")
+    
+    # Start polling dengan skip pending
+    bot.polling(
+        none_stop=True,
+        timeout=30,
+        skip_pending=True  # Skip old messages
+    )
