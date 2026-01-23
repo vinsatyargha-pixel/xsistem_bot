@@ -49,36 +49,42 @@ def parse_report_text(text):
     return data
 
 # ========== COMMAND HANDLERS ==========
-@bot.message_handler(commands=['formatreset'])
-def handle_format_reset(message):
-    """Command /formatreset untuk format reset password"""
+@bot.message_handler(commands=['formatreport'])
+def handle_format_report(message):
+    """Command /formatreport untuk tampilkan semua format report"""
     try:
         format_text = """
-📋 *CONTOH FORMAT YANG BENAR:*
+📋 (PILIH SALAH SATU KATEGORI - JANGAN TYPO)
 
-/repas ID ASSET
-BANK MEMBER
-BANK TUJUAN
-WALLET :
-OFFICER :
+REPORT CROSSBANK
+REPORT MISTAKE
+REPORT FEE
+REPORT PENDINGAN
+REPORT PROCESS PENDINGAN
+REPORT REFUND
 
-───────────────
-*Contoh lengkap:*
-/repas GGWP123 XLY
-BRI
-BCA
-WALLET : BCA
-OFFICER : kamu
+FORMAT:
+ASET: BTC (sesuaikan)
+USER ID: LAPARBANG123 (sesuaikan)
+BANK MEMBER: BCA DONALD BEBEK 123456789 (sesuaikan)
+BANK ASSET: BCA MICKEY MOUSE 987654321 (sesuaikan)
+NO TICKET: D123456/W123456 (sesuaikan)
+AMOUNT: 50.000 (sesuaikan)
+CASE: Keterangan (sesuaikan)
+OFFICER: USER ID (punya kamu)
 
-───────────────
-*Trigger alternatif juga bisa:*
-/reset GGWP123 XLY
-/repass GGWP123-XLY
-/reset GGWP123 XLY DANA BCA
-
-*Note:* Bot akan ambil 2 kata pertama setelah command.
+Contoh:
+REPORT CROSSBANK
+ASET: BTC (sesuaikan)
+USER ID: LAPARBANG123 (sesuaikan)
+BANK MEMBER: BCA DONALD BEBEK 123456789 (sesuaikan)
+BANK ASSET: BCA MICKEY MOUSE 987654321 (sesuaikan)
+NO TICKET: D123456/W123456 (sesuaikan)
+AMOUNT: 50.000 (sesuaikan)
+CASE: KHILAF
+OFFICER: USER ID (punya kamu)
 """
-        bot.reply_to(message, format_text, parse_mode='Markdown')
+        bot.reply_to(message, format_text, parse_mode=None)  # parse_mode=None biar text biasa
     except:
         pass
 
@@ -426,3 +432,4 @@ if __name__ == "__main__":
         timeout=30,
         skip_pending=True  # Skip old messages
     )
+
