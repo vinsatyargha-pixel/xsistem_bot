@@ -30,27 +30,34 @@ def run_flask():
 
 # ========== AUTO PINGER ==========
 def ping_self():
-    """Ping URL sendiri biar nggak sleep"""
-    print("⏰ Auto-pinger started")
+    """Ping dari DALAM server ke URL PUBLIC"""
+    import time
+    import requests
+    
+    print("⏰ Starting REAL pinger")
+    time.sleep(30)  # Tunggu Flask start
     
     while True:
         try:
-            # Tunggu 8 menit dulu (480 detik)
-            time.sleep(480)
-            
-            # Ping sendiri
-            port = os.environ.get("PORT", "5000")
-            response = requests.get(f"http://0.0.0.0:{port}/", timeout=5)
+            # PING KE URL PUBLIC, bukan localhost!
+            url = "https://cek-rekening-fi8f.onrender.com"
+            response = requests.get(url, timeout=10)
             
             now = time.strftime("%H:%M:%S")
             if response.status_code == 200:
-                print(f"✅ [{now}] Self-ping successful")
+                print(f"✅ [{now}] Ping successful - Bot alive")
             else:
                 print(f"⚠️ [{now}] Ping failed")
-                
         except Exception as e:
             now = time.strftime("%H:%M:%S")
-            print(f"❌ [{now}] Ping error: {str(e)[:50]}")
+            print(f"❌ [{now}] Ping error")
+        
+        # Tunggu 8 menit
+        time.sleep(480)
+
+# Tambah di main():
+pinger_thread = threading.Thread(target=ping_self, daemon=True)
+pinger_thread.start()
 
 # ========== BOT FUNCTIONS ==========
 def buat_password():
@@ -319,3 +326,4 @@ if __name__ == "__main__":
     
     # Jalankan bot (main thread)
     run_bot()
+
