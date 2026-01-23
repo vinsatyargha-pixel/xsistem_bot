@@ -423,3 +423,43 @@ if __name__ == "__main__":
         skip_pending=True  # Skip old messages
     )
 
+# ========== WEB SERVER FOR RENDER (FREE TIER) ==========
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return "🤖 X-SISTEM BOT IS RUNNING", 200
+
+@web_app.route('/health')
+def health():
+    return "✅ OK", 200
+
+def run_flask():
+    """Jalankan Flask di port yang ditentukan Render"""
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🌐 Starting Flask server on port {port}")
+    web_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+def run_bot():
+    """Jalankan Telegram bot"""
+    print("🤖 Starting Telegram Bot...")
+    bot.polling(
+        none_stop=True,
+        timeout=30,
+        skip_pending=True
+    )
+
+if __name__ == "__main__":
+    print("=" * 50)
+    print("🤖 X-SISTEM BOT - HYBRID MODE (FREE TIER)")
+    print("📱 /reset [ID] [ASSET] - Reset password")
+    print("📊 /report - Pilih jenis report")
+    print("🌐 Web server: http://0.0.0.0:${PORT}")
+    print("=" * 50)
+    
+    # Jalankan Flask di thread terpisah
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    # Jalankan bot (main thread)
+    run_bot()
