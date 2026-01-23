@@ -16,7 +16,7 @@ def buat_password():
 def save_crossbank_report(data):
     """Simpan report ke Google Sheets via Apps Script"""
     try:
-        web_app_url = "https://script.google.com/macros/s/AKfycbzkvryqKNNXntNMrXwmv-aoqAU8ZRGmid9TXHLlU4dVY7pgCd9CUh0dMgA7jagc83yweA/exec"
+        web_app_url = "https://script.google.com/macros/s/AKfycbwGpv7pgFrMRccC0y3IkkQxcehSX3D0nLMZYWkFtjywVF2AIpj4R1MEj5mtaYd-U_TLVw/exec"
         
         payload = {
             'message': {
@@ -422,3 +422,4 @@ if __name__ == "__main__":
         timeout=30,
         skip_pending=True  # Skip old messages
     )
+
