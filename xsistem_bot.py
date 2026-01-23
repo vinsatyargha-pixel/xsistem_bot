@@ -49,9 +49,42 @@ def parse_report_text(text):
     return data
 
 # ========== COMMAND HANDLERS ==========
-@bot.message_handler(commands=['format'])
-def handle_format_command(message):
-    """Command /format untuk tampilkan semua format"""
+@bot.message_handler(commands=['formatreset'])
+def handle_format_reset(message):
+    """Command /formatreset untuk format reset password"""
+    try:
+        format_text = """
+📋 *CONTOH FORMAT YANG BENAR:*
+
+/repas ID ASSET
+BANK MEMBER
+BANK TUJUAN
+WALLET :
+OFFICER :
+
+───────────────
+*Contoh lengkap:*
+/repas GGWP123 XLY
+BRI
+BCA
+WALLET : BCA
+OFFICER : kamu
+
+───────────────
+*Trigger alternatif juga bisa:*
+/reset GGWP123 XLY
+/repass GGWP123-XLY
+/reset GGWP123 XLY DANA BCA
+
+*Note:* Bot akan ambil 2 kata pertama setelah command.
+"""
+        bot.reply_to(message, format_text, parse_mode='Markdown')
+    except:
+        pass
+
+@bot.message_handler(commands=['formatreport'])
+def handle_format_report(message):
+    """Command /formatreport untuk tampilkan semua format report"""
     try:
         format_text = """
 📋 *(PILIH SALAH SATU KATEGORI - JANGAN TYPO)*
@@ -86,7 +119,7 @@ OFFICER: John Doe
 """
         bot.reply_to(message, format_text, parse_mode='Markdown')
     except:
-        pass  # Abaikan jika gagal
+        pass
 
 @bot.message_handler(commands=['report'])
 def handle_report_command(message):
@@ -104,12 +137,18 @@ def handle_report_command(message):
         
         bot.reply_to(
             message,
-            "📊 *PILIH JENIS REPORT:*",
+            "📊 *PILIH JENIS REPORT:*\n\n"
+            "Atau ketik langsung:\n"
+            "• REPORT CROSSBANK\n"
+            "• REPORT PENDINGAN\n"
+            "• REPORT MISTAKE\n"
+            "• dll...\n\n"
+            "Untuk format lengkap: /formatreport",
             reply_markup=markup,
             parse_mode='Markdown'
         )
     except:
-        pass  # Abaikan jika gagal
+        pass
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('report_'))
 def handle_report_type(call):
@@ -284,13 +323,16 @@ def handle_fee_message(message):
     cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']
 ))
 def handle_reset_only_text(message):
-    """HANYA proses text message asli, BUKAN caption foto/forward"""
+    """Handle reset command dengan format multi-line"""
     try:
         text = message.text.strip()
-        parts = text.split()
+        
+        # Ambil hanya baris pertama untuk parsing
+        first_line = text.split('\n')[0]
+        parts = first_line.split()
         
         if len(parts) < 3:
-            return  # Abaikan format salah
+            return  # Format salah, silent abort
         
         user_id = parts[1]
         asset = parts[2]
@@ -372,9 +414,10 @@ def handle_reset_callback(call):
 
 if __name__ == "__main__":
     print("🤖 X-SISTEM BOT - SILENT MODE")
-    print("📱 /reset [ID] [ASSET]")
-    print("📊 /report - Pilih jenis")
-    print("📋 /format - Tampilkan format")
+    print("📱 /reset [ID] [ASSET] - Reset password")
+    print("📱 /formatreset - Format reset password")
+    print("📊 /report - Pilih jenis report")
+    print("📋 /formatreport - Format semua report")
     print("🚫 Auto abort jika error")
     
     # Start polling dengan skip pending
