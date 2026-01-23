@@ -1,0 +1,250 @@
+import telebot
+import random
+import string
+from telebot import types
+import time
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import json
+import os
+
+TOKEN = "8087735462:AAGII-XvO3hJy3YgDd3b0vjiIHjnQCn4Ej4"
+bot = telebot.TeleBot(TOKEN)
+
+def buat_password():
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.choice(chars) for _ in range(10))
+
+# ========== GOOGLE SHEETS REPORT ==========
+def setup_google_sheets():
+    """Setup koneksi ke Google Sheets"""
+    scope = ['https://spreadsheets.google.com/feeds',
+             'https://www.googleapis.com/auth/drive']
+    
+    # Ambil credentials dari environment variable (Render)
+    creds_json = os.environ.get('GOOGLE_CREDENTIALS')
+    
+    if creds_json:
+        # Dari environment variable
+        creds_dict = json.loads(creds_json)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    else:
+        # Untuk local testing (pakai file)
+        creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+    
+    client = gspread.authorize(creds)
+    return client
+
+def save_crossbank_report(data):
+    """Simpan report crossbank ke Google Sheets"""
+    try:
+        client = setup_google_sheets()
+        
+        # AMBIL SHEET_ID dari environment variable
+        sheet_id = os.environ.get('SHEET_ID')  # ← FIX: pakai 'SHEET_ID' bukan ID langsung
+        if not sheet_id:
+            return False, "SHEET_ID tidak ditemukan"
+        
+        spreadsheet = client.open_by_key(sheet_id)
+        
+        # Pilih worksheet "OUTPUT BOT"
+        worksheet = spreadsheet.worksheet("OUTPUT BOT")
+        
+        # Cari baris kosong di kolom F (mulai baris 3)
+        col_f = worksheet.col_values(6)  # Kolom F = index 6
+        
+        row_index = 3
+        while row_index <= len(col_f) and col_f[row_index-1]:
+            row_index += 1
+        
+        # Isi data sesuai kolom
+        worksheet.update_cell(row_index, 6, "REPORT CROSSBANK")  # F3
+        worksheet.update_cell(row_index, 7, data.get('aset', ''))  # G3
+        worksheet.update_cell(row_index, 8, data.get('user_id', ''))  # H3
+        worksheet.update_cell(row_index, 9, data.get('bank_member', ''))  # I3
+        worksheet.update_cell(row_index, 10, data.get('bank_asset', ''))  # J3
+        worksheet.update_cell(row_index, 11, data.get('no_ticket', ''))  # K3
+        worksheet.update_cell(row_index, 12, data.get('amount', ''))  # L3
+        worksheet.update_cell(row_index, 13, data.get('case', ''))  # M3
+        worksheet.update_cell(row_index, 14, data.get('officer', ''))  # N3
+        
+        return True, row_index
+        
+    except Exception as e:
+        return False, str(e)
+
+def parse_report_text(text):
+    """Parse text report menjadi dictionary"""
+    data = {}
+    lines = text.split('\n')
+    
+    for line in lines:
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip().lower().replace(' ', '_')
+            value = parts[1].strip()
+            data[key] = value
+    
+    return data
+
+# ========== REPORT CROSSBANK HANDLER ==========
+@bot.message_handler(commands=['report'])
+def handle_report_command(message):
+    """Command /report untuk instruksi"""
+    help_text = """
+📋 *FORMAT REPORT CROSSBANK*
+
+REPORT CROSSBANK
+ASET: BTC
+USER ID: 123456
+BANK MEMBER: BCA
+BANK ASSET: Binance
+NO TICKET: TKT789
+AMOUNT: 5000000
+CASE: Fraud
+OFFICER: John Doe
+
+*Kirim pesan dengan format di atas*
+"""
+    bot.reply_to(message, help_text, parse_mode='Markdown')
+
+@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT CROSSBANK'))
+def handle_report_message(message):
+    """Handle report crossbank lengkap"""
+    try:
+        text = message.text.strip()
+        
+        # Parse data
+        data = parse_report_text(text)
+        
+        # Validasi field wajib
+        required_fields = ['aset', 'user_id', 'bank_member', 'bank_asset', 'amount']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        
+        if missing_fields:
+            bot.reply_to(message, f"❌ Data kurang: {', '.join(missing_fields)}")
+            return
+        
+        # Simpan ke Google Sheets
+        success, result = save_crossbank_report(data)
+        
+        if success:
+            response = (
+                f"✅ *REPORT BERHASIL DISIMPAN!*\n"
+                f"📝 Baris: {result}\n"
+                f"👤 User ID: {data.get('user_id')}\n"
+                f"🏦 Bank Member: {data.get('bank_member')}\n"
+                f"💰 Amount: {data.get('amount')}"
+            )
+            bot.reply_to(message, response, parse_mode='Markdown')
+        else:
+            bot.reply_to(message, f"❌ Gagal simpan: {result}")
+            
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error: {str(e)}")
+
+# ========== CRITICAL FIX ==========
+# HANYA handle text messages yang BUKAN forward dan BUKAN caption foto
+@bot.message_handler(func=lambda m: m.text and not m.forward_from and any(
+    cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']
+))
+def handle_reset_only_text(message):
+    """HANYA proses text message asli, BUKAN caption foto/forward"""
+    try:
+        text = message.text.strip()
+        parts = text.split()
+        
+        if len(parts) < 3:
+            bot.reply_to(message, "Format: /reset ID ASSET\nContoh: /reset MAGNIX XLY")
+            return
+        
+        user_id = parts[1]
+        asset = parts[2]
+        
+        print(f"📩 Reset TEXT: {user_id} {asset} dari @{message.from_user.username}")
+        
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
+            types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
+        )
+        
+        bot.reply_to(
+            message,
+            f"🔔 *RESET REQUEST*\n\n"
+            f"👤 CS: {message.from_user.full_name}\n"
+            f"🆔 User: `{user_id}`\n"
+            f"🎮 Asset: `{asset}`\n\n"
+            f"**PILIH:**",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+# ========== IGNORE COMPLETELY ==========
+@bot.message_handler(content_types=['photo', 'document', 'video', 'audio', 'voice'])
+def ignore_all_media(message):
+    """ABAIKAN SEMUA MEDIA DAN CAPTIONNYA - TIDAK APA-APA"""
+    pass
+
+@bot.callback_query_handler(func=lambda call: True)
+def handle_callback(call):
+    try:
+        if call.data.startswith('ok_'):
+            _, cs_id, user_id, asset = call.data.split('_')
+            cs_id = int(cs_id)
+            
+            password = buat_password()
+            
+            # Format yang diminta
+            message_text = f"{user_id} - {asset}\nPassword baru : {password}"
+            
+            # Kirim password di grup
+            bot.send_message(
+                call.message.chat.id,
+                message_text,
+                reply_to_message_id=call.message.reply_to_message.message_id
+            )
+            
+            # Update tombol
+            bot.edit_message_text(
+                f"✅ *RESET DISETUJUI*\n\n"
+                f"User: `{user_id}`\n"
+                f"Asset: `{asset}`\n"
+                f"Password: `{password}`",
+                call.message.chat.id,
+                call.message.message_id,
+                parse_mode='Markdown'
+            )
+            
+            bot.answer_callback_query(call.id, "✅ Password dikirim")
+            
+        elif call.data.startswith('no_'):
+            cs_id = int(call.data.split('_')[1])
+            
+            bot.send_message(
+                call.message.chat.id,
+                "❌ Permintaan ditolak Captain !!",
+                reply_to_message_id=call.message.reply_to_message.message_id
+            )
+            
+            bot.edit_message_text(
+                f"❌ *REQUEST DITOLAK*",
+                call.message.chat.id,
+                call.message.message_id,
+                parse_mode='Markdown'
+            )
+            
+            bot.answer_callback_query(call.id, "❌ Ditolak")
+            
+    except Exception as e:
+        print(f"❌ Callback error: {e}")
+        bot.answer_callback_query(call.id, "❌ Error")
+
+if __name__ == "__main__":
+    print("🤖 BOT STARTED - IGNORING ALL MEDIA")
+    print("📱 Hanya proses text command /reset, /repass, /repas")
+    print("📋 Report Crossbank aktif: /report")
+    bot.polling(none_stop=True)
