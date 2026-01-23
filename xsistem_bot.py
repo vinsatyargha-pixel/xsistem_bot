@@ -4,54 +4,58 @@ import string
 from telebot import types
 import time
 import requests
+import os
+import threading
+from flask import Flask
 
 TOKEN = "8087735462:AAGII-XvO3hJy3YgDd3b0vjiIHjnQCn4Ej4"
 bot = telebot.TeleBot(TOKEN)
 
+# ========== WEB SERVER FOR RENDER ==========
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return "🤖 X-SISTEM BOT IS RUNNING", 200
+
+@web_app.route('/health')
+def health():
+    return "✅ OK", 200
+
+def run_flask():
+    """Jalankan Flask di port yang ditentukan Render"""
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🌐 Starting Flask server on port {port}")
+    web_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+# ========== BOT FUNCTIONS (SAMA DENGAN KODE LAMA) ==========
 def buat_password():
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(10))
 
-# ========== GOOGLE SHEETS VIA APPS SCRIPT ==========
 def save_crossbank_report(data):
-    """Simpan report ke Google Sheets via Apps Script"""
     try:
         web_app_url = "https://script.google.com/macros/s/AKfycbwGpv7pgFrMRccC0y3IkkQxcehSX3D0nLMZYWkFtjywVF2AIpj4R1MEj5mtaYd-U_TLVw/exec"
-        
-        payload = {
-            'message': {
-                'text': data['original_text']
-            }
-        }
-        
+        payload = {'message': {'text': data['original_text']}}
         response = requests.post(web_app_url, json=payload, timeout=10)
-        
-        if response.status_code == 200:
-            return True, "Data tersimpan"
-        else:
-            return False, f"Error: {response.status_code}"
-            
+        return (True, "Data tersimpan") if response.status_code == 200 else (False, f"Error: {response.status_code}")
     except Exception as e:
         return False, str(e)
 
 def parse_report_text(text):
-    """Parse text report menjadi dictionary"""
     data = {'original_text': text}
     lines = text.split('\n')
-    
     for line in lines:
         if ':' in line:
             parts = line.split(':', 1)
             key = parts[0].strip().lower().replace(' ', '_')
             value = parts[1].strip()
             data[key] = value
-    
     return data
 
 # ========== COMMAND HANDLERS ==========
 @bot.message_handler(commands=['formatreset'])
 def handle_format_reset(message):
-    """Command /formatreset untuk format reset password"""
     try:
         format_text = """📋 CONTOH FORMAT YANG BENAR:
 
@@ -82,7 +86,6 @@ Note: Bot akan ambil 2 kata pertama setelah command."""
 
 @bot.message_handler(commands=['formatreport'])
 def handle_format_report(message):
-    """Command /formatreport untuk tampilkan semua format report"""
     try:
         format_text = """📋 (PILIH SALAH SATU KATEGORI - JANGAN TYPO)
 
@@ -119,7 +122,6 @@ OFFICER: USER ID (punya kamu)"""
 
 @bot.message_handler(commands=['report'])
 def handle_report_command(message):
-    """Command /report untuk pilih jenis report"""
     try:
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
@@ -130,16 +132,9 @@ def handle_report_command(message):
             types.InlineKeyboardButton("↩️ REFUND", callback_data="report_refund"),
             types.InlineKeyboardButton("💰 FEE", callback_data="report_fee")
         )
-        
         bot.reply_to(
             message,
-            "📊 *PILIH JENIS REPORT:*\n\n"
-            "Atau ketik langsung:\n"
-            "• REPORT CROSSBANK\n"
-            "• REPORT PENDINGAN\n"
-            "• REPORT MISTAKE\n"
-            "• dll...\n\n"
-            "Untuk format lengkap: /formatreport",
+            "📊 *PILIH JENIS REPORT:*\n\nAtau ketik langsung:\n• REPORT CROSSBANK\n• REPORT PENDINGAN\n• REPORT MISTAKE\n• dll...\n\nUntuk format lengkap: /formatreport",
             reply_markup=markup,
             parse_mode='Markdown'
         )
@@ -148,90 +143,16 @@ def handle_report_command(message):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('report_'))
 def handle_report_type(call):
-    """Handle pemilihan jenis report"""
     try:
         report_type = call.data.replace('report_', '')
-        
         formats = {
-            'crossbank': """
-📋 *FORMAT REPORT CROSSBANK*
-
-REPORT CROSSBANK
-ASET: BTC
-USER ID: 123456
-BANK MEMBER: BCA
-BANK ASSET: Binance
-NO TICKET: TKT789
-AMOUNT: 5000000
-CASE: Fraud
-OFFICER: John Doe""",
-            
-            'pendingan': """
-⏳ *FORMAT REPORT PENDINGAN*
-
-REPORT PENDINGAN
-ASET: BTC
-USER ID: 123456
-BANK MEMBER: BCA
-BANK ASSET: Binance
-NO TICKET: TKT789
-AMOUNT: 5000000
-CASE: Input Pendingan Deposit
-OFFICER: John Doe""",
-            
-            'process_pendingan': """
-🔄 *FORMAT REPORT PROCESS PENDINGAN*
-
-REPORT PROCESS PENDINGAN
-ASET: BTC
-USER ID: 123456
-BANK MEMBER: BCA
-BANK ASSET: Binance
-NO TICKET: TKT789
-AMOUNT: 5000000
-CASE: Proses Pendingan Deposit
-OFFICER: John Doe""",
-            
-            'mistake': """
-❌ *FORMAT REPORT MISTAKE*
-
-REPORT MISTAKE
-ASET: BTC
-USER ID: 123456
-BANK MEMBER: BCA
-BANK ASSET: Binance
-NO TICKET: TKT789
-AMOUNT: 5000000
-CASE: Kesalahan Input Data
-OFFICER: John Doe""",
-            
-            'refund': """
-↩️ *FORMAT REPORT REFUND*
-
-REPORT REFUND
-ASET: BTC
-USER ID: 123456
-BANK MEMBER: BCA
-BANK ASSET: Binance
-NO TICKET: TKT789
-AMOUNT: 5000000
-CASE: Pengembalian Dana
-OFFICER: John Doe""",
-            
-            'fee': """
-💰 *FORMAT REPORT FEE*
-
-REPORT FEE
-ASET: BTC
-USER ID: 123456
-BANK MEMBER: BCA
-BANK ASSET: Binance
-NO TICKET: TKT789
-AMOUNT: 5000000
-CASE: Biaya Admin/Operasional
-OFFICER: John Doe"""
+            'crossbank': "\n📋 *FORMAT REPORT CROSSBANK*\n\nREPORT CROSSBANK\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Fraud\nOFFICER: John Doe",
+            'pendingan': "\n⏳ *FORMAT REPORT PENDINGAN*\n\nREPORT PENDINGAN\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Input Pendingan Deposit\nOFFICER: John Doe",
+            'process_pendingan': "\n🔄 *FORMAT REPORT PROCESS PENDINGAN*\n\nREPORT PROCESS PENDINGAN\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Proses Pendingan Deposit\nOFFICER: John Doe",
+            'mistake': "\n❌ *FORMAT REPORT MISTAKE*\n\nREPORT MISTAKE\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Kesalahan Input Data\nOFFICER: John Doe",
+            'refund': "\n↩️ *FORMAT REPORT REFUND*\n\nREPORT REFUND\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Pengembalian Dana\nOFFICER: John Doe",
+            'fee': "\n💰 *FORMAT REPORT FEE*\n\nREPORT FEE\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Biaya Admin/Operasional\nOFFICER: John Doe"
         }
-        
         bot.edit_message_text(
             formats[report_type] + "\n\n*Kirim pesan dengan format di atas*",
             call.message.chat.id,
@@ -245,51 +166,28 @@ OFFICER: John Doe"""
         except:
             pass
 
-# ========== UNIVERSAL REPORT HANDLER ==========
 def handle_report_generic(message, report_type):
-    """Handle semua jenis report"""
     try:
         text = message.text.strip()
-        
-        # Validasi JANGAN TYPO
         valid_types = [
-            'REPORT CROSSBANK',
-            'REPORT PENDINGAN', 
-            'REPORT PROCESS PENDINGAN',
-            'REPORT MISTAKE',
-            'REPORT REFUND',
-            'REPORT FEE'
+            'REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
+            'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE'
         ]
-        
         if not any(text.startswith(t) for t in valid_types):
-            return  # Abaikan typo, biarkan agent edit sendiri
-        
-        # Parse data
+            return
         data = parse_report_text(text)
-        
-        # Validasi field wajib
         required = ['aset', 'bank_member', 'bank_asset', 'amount', 'case', 'officer']
-        
-        # Untuk CROSSBANK, USER ID wajib
         if report_type == 'CROSSBANK':
             required.append('user_id')
-        
         missing = [field for field in required if not data.get(field)]
-        
         if missing:
-            # Tidak perlu reply, biarkan agent lengkapi sendiri
             return
-        
-        # Simpan ke Google Sheets
         success, result = save_crossbank_report(data)
-        
         if success:
             bot.reply_to(message, "✅ REPORT BERHASIL DISIMPAN!")
-        # Tidak perlu else, biarkan fail silent
     except:
-        pass  # ABORT SEMUA ERROR, BIARKAN FLOW LANGSUNG
+        pass
 
-# ========== SPECIFIC REPORT HANDLERS ==========
 @bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT CROSSBANK'))
 def handle_crossbank_message(message):
     handle_report_generic(message, 'CROSSBANK')
@@ -314,131 +212,60 @@ def handle_refund_message(message):
 def handle_fee_message(message):
     handle_report_generic(message, 'FEE')
 
-# ========== RESET PASSWORD HANDLERS ==========
 @bot.message_handler(func=lambda m: m.text and not m.forward_from and any(
     cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']
 ))
 def handle_reset_only_text(message):
-    """Handle reset command dengan format multi-line"""
     try:
         text = message.text.strip()
-        
-        # Ambil hanya baris pertama untuk parsing
         first_line = text.split('\n')[0]
         parts = first_line.split()
-        
         if len(parts) < 3:
-            return  # Format salah, silent abort
-        
+            return
         user_id = parts[1]
         asset = parts[2]
-        
         print(f"📩 Reset: {user_id} {asset}")
-        
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
             types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
             types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
         )
-        
         bot.reply_to(
             message,
-            f"🔔 *RESET REQUEST*\n\n"
-            f"👤 CS: {message.from_user.first_name}\n"
-            f"🆔 User: `{user_id}`\n"
-            f"🎮 Asset: `{asset}`\n\n"
-            f"**PILIH:**",
+            f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
             reply_markup=markup,
             parse_mode='Markdown'
         )
     except:
-        pass  # Abaikan error
+        pass
 
 @bot.message_handler(content_types=['photo', 'document', 'video', 'audio', 'voice'])
 def ignore_all_media(message):
-    """ABAIKAN SEMUA MEDIA"""
     pass
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('ok_') or call.data.startswith('no_'))
 def handle_reset_callback(call):
-    """Handle reset callback - TANPA REPLY TO MESSAGE"""
     try:
         if call.data.startswith('ok_'):
             _, cs_id, user_id, asset = call.data.split('_')
-            
             password = buat_password()
-            
-            # KIRIM PASSWORD (TANPA REPLY)
-            bot.send_message(
-                call.message.chat.id,
-                f"{user_id} - {asset}\nPassword baru : {password}"
-            )
-            
-            # UPDATE TOMBOL
+            bot.send_message(call.message.chat.id, f"{user_id} - {asset}\nPassword baru : {password}")
             bot.edit_message_text(
-                f"✅ *RESET DISETUJUI*\n\n"
-                f"User: `{user_id}`\n"
-                f"Asset: `{asset}`\n"
-                f"Password: `{password}`",
+                f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`",
                 call.message.chat.id,
                 call.message.message_id,
                 parse_mode='Markdown'
             )
-            
             bot.answer_callback_query(call.id, "✅ Password dikirim")
-            
         elif call.data.startswith('no_'):
-            # KIRIM PESAN TOLAK (TANPA REPLY)
-            bot.send_message(
-                call.message.chat.id,
-                "❌ Permintaan ditolak Captain !!"
-            )
-            
-            bot.edit_message_text(
-                "❌ *REQUEST DITOLAK*",
-                call.message.chat.id,
-                call.message.message_id,
-                parse_mode='Markdown'
-            )
-            
+            bot.send_message(call.message.chat.id, "❌ Permintaan ditolak Captain !!")
+            bot.edit_message_text("❌ *REQUEST DITOLAK*", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
             bot.answer_callback_query(call.id, "❌ Ditolak")
     except:
         try:
             bot.answer_callback_query(call.id, "⚠️ Action gagal")
         except:
             pass
-
-if __name__ == "__main__":
-    print("🤖 X-SISTEM BOT - SILENT MODE")
-    print("📱 /reset [ID] [ASSET] - Reset password")
-    print("📱 /formatreset - Format reset password")
-    print("📊 /report - Pilih jenis report")
-    print("📋 /formatreport - Format semua report")
-    print("🚫 Auto abort jika error")
-    
-    # Start polling dengan skip pending
-    bot.polling(
-        none_stop=True,
-        timeout=30,
-        skip_pending=True  # Skip old messages
-    )
-
-# ========== WEB SERVER FOR RENDER (FREE TIER) ==========
-web_app = Flask(__name__)
-
-@web_app.route('/')
-def home():
-    return "🤖 X-SISTEM BOT IS RUNNING", 200
-
-@web_app.route('/health')
-def health():
-    return "✅ OK", 200
-
-def run_flask():
-    """Jalankan Flask di port yang ditentukan Render"""
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🌐 Starting Flask server on port {port}")
-    web_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 def run_bot():
     """Jalankan Telegram bot"""
