@@ -49,12 +49,42 @@ def parse_report_text(text):
     return data
 
 # ========== COMMAND HANDLERS ==========
+@bot.message_handler(commands=['formatreset'])
+def handle_format_reset(message):
+    """Command /formatreset untuk format reset password"""
+    try:
+        format_text = """📋 CONTOH FORMAT YANG BENAR:
+
+/repas ID ASSET
+BANK MEMBER
+BANK TUJUAN
+WALLET :
+OFFICER :
+
+───────────────
+Contoh lengkap:
+/repas GGWP123 XLY
+BRI TRALALA 123456789101112
+BCA BLABLABLA 9876543210
+WALLET : 
+OFFICER : kamu
+
+───────────────
+Trigger alternatif juga bisa:
+/reset GGWP123 XLY
+/repass GGWP123-XLY
+/reset GGWP123 XLY DANA BCA
+
+Note: Bot akan ambil 2 kata pertama setelah command."""
+        bot.reply_to(message, format_text, parse_mode=None)
+    except:
+        pass
+
 @bot.message_handler(commands=['formatreport'])
 def handle_format_report(message):
     """Command /formatreport untuk tampilkan semua format report"""
     try:
-        format_text = """
-📋 (PILIH SALAH SATU KATEGORI - JANGAN TYPO)
+        format_text = """📋 (PILIH SALAH SATU KATEGORI - JANGAN TYPO)
 
 REPORT CROSSBANK
 REPORT MISTAKE
@@ -82,48 +112,8 @@ BANK ASSET: BCA MICKEY MOUSE 987654321 (sesuaikan)
 NO TICKET: D123456/W123456 (sesuaikan)
 AMOUNT: 50.000 (sesuaikan)
 CASE: KHILAF
-OFFICER: USER ID (punya kamu)
-"""
-        bot.reply_to(message, format_text, parse_mode=None)  # parse_mode=None biar text biasa
-    except:
-        pass
-
-@bot.message_handler(commands=['formatreport'])
-def handle_format_report(message):
-    """Command /formatreport untuk tampilkan semua format report"""
-    try:
-        format_text = """
-📋 *(PILIH SALAH SATU KATEGORI - JANGAN TYPO)*
-
-*REPORT CROSSBANK*
-*REPORT MISTAKE*
-*REPORT FEE*
-*REPORT PENDINGAN*
-*REPORT PROCESS PENDINGAN*
-*REPORT REFUND*
-
-*FORMAT:*
-ASET: [BTC/ETH/dll]
-USER ID: [123456]
-BANK MEMBER: [BCA/BRI/dll]
-BANK ASSET: [Binance/Triv/dll]
-NO TICKET: [TKT001]
-AMOUNT: [5000000]
-CASE: [Keterangan]
-OFFICER: [Nama Officer]
-
-*Contoh:*
-REPORT CROSSBANK
-ASET: BTC
-USER ID: 123456
-BANK MEMBER: BCA
-BANK ASSET: Binance
-NO TICKET: TKT789
-AMOUNT: 5000000
-CASE: Fraud
-OFFICER: John Doe
-"""
-        bot.reply_to(message, format_text, parse_mode='Markdown')
+OFFICER: USER ID (punya kamu)"""
+        bot.reply_to(message, format_text, parse_mode=None)
     except:
         pass
 
@@ -432,4 +422,3 @@ if __name__ == "__main__":
         timeout=30,
         skip_pending=True  # Skip old messages
     )
-
