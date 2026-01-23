@@ -28,7 +28,31 @@ def run_flask():
     print(f"🌐 Starting Flask server on port {port}")
     web_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
-# ========== BOT FUNCTIONS (SAMA DENGAN KODE LAMA) ==========
+# ========== AUTO PINGER ==========
+def ping_self():
+    """Ping URL sendiri biar nggak sleep"""
+    print("⏰ Auto-pinger started")
+    
+    while True:
+        try:
+            # Tunggu 8 menit dulu (480 detik)
+            time.sleep(480)
+            
+            # Ping sendiri
+            port = os.environ.get("PORT", "5000")
+            response = requests.get(f"http://0.0.0.0:{port}/", timeout=5)
+            
+            now = time.strftime("%H:%M:%S")
+            if response.status_code == 200:
+                print(f"✅ [{now}] Self-ping successful")
+            else:
+                print(f"⚠️ [{now}] Ping failed")
+                
+        except Exception as e:
+            now = time.strftime("%H:%M:%S")
+            print(f"❌ [{now}] Ping error: {str(e)[:50]}")
+
+# ========== BOT FUNCTIONS ==========
 def buat_password():
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(10))
@@ -278,15 +302,20 @@ def run_bot():
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("🤖 X-SISTEM BOT - HYBRID MODE (FREE TIER)")
+    print("🤖 X-SISTEM BOT - 24/7 WITH PINGER")
     print("📱 /reset [ID] [ASSET] - Reset password")
     print("📊 /report - Pilih jenis report")
     print("🌐 Web server: http://0.0.0.0:${PORT}")
+    print("⏰ Auto-pinger: Every 8 minutes")
     print("=" * 50)
     
     # Jalankan Flask di thread terpisah
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
+    
+    # Jalankan pinger di thread terpisah
+    pinger_thread = threading.Thread(target=ping_self, daemon=True)
+    pinger_thread.start()
     
     # Jalankan bot (main thread)
     run_bot()
