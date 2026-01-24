@@ -327,7 +327,7 @@ def handle_injection_request(message):
     send_admin_confirmation(injection_data, message)
     bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin untuk konfirmasi.")
 
-# ========== CALLBACK HANDLER ==========
+# ========== CALLBACK HANDLER UNTUK SUNIK ==========
 @bot.callback_query_handler(func=lambda call: call.data.startswith('inj_'))
 def handle_injection_callback(call):
     try:
@@ -416,6 +416,248 @@ def handle_injection_callback(call):
         except:
             pass
 
+# ========== FUNGSI RESET PASSWORD & REPORT ==========
+def buat_password():
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.choice(chars) for _ in range(10))
+
+def save_crossbank_report(data):
+    try:
+        web_app_url = "https://script.google.com/macros/s/AKfycbwGpv7pgFrMRccC0y3IkkQxcehSX3D0nLMZYWkFtjywVF2AIpj4R1MEj5mtaYd-U_TLVw/exec"
+        payload = {'message': {'text': data['original_text']}}
+        response = requests.post(web_app_url, json=payload, timeout=10)
+        return (True, "Data tersimpan") if response.status_code == 200 else (False, f"Error: {response.status_code}")
+    except Exception as e:
+        return False, str(e)
+
+def parse_report_text(text):
+    data = {'original_text': text}
+    lines = text.split('\n')
+    for line in lines:
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip().lower().replace(' ', '_')
+            value = parts[1].strip()
+            data[key] = value
+    return data
+
+def handle_report_generic(message, report_type):
+    try:
+        text = message.text.strip()
+        valid_types = [
+            'REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
+            'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE'
+        ]
+        if not any(text.startswith(t) for t in valid_types):
+            return
+        data = parse_report_text(text)
+        required = ['aset', 'bank_member', 'bank_asset', 'amount', 'case', 'officer']
+        if report_type == 'CROSSBANK':
+            required.append('user_id')
+        missing = [field for field in required if not data.get(field)]
+        if missing:
+            return
+        success, result = save_crossbank_report(data)
+        if success:
+            bot.reply_to(message, "✅ REPORT BERHASIL DISIMPAN!")
+    except:
+        pass
+
+# ========== COMMAND HANDLERS UNTUK RESET & REPORT ==========
+@bot.message_handler(commands=['formatreset'])
+def handle_format_reset(message):
+    try:
+        format_text = """📋 CONTOH FORMAT YANG BENAR:
+
+/repas ID ASSET
+BANK MEMBER
+BANK TUJUAN
+WALLET :
+OFFICER :
+
+───────────────
+Contoh lengkap:
+/repas GGWP123 XLY
+BRI TRALALA 123456789101112
+BCA BLABLABLA 9876543210
+WALLET : 
+OFFICER : kamu
+
+───────────────
+Trigger alternatif juga bisa:
+/reset GGWP123 XLY
+/repass GGWP123-XLY
+/reset GGWP123 XLY DANA BCA
+
+Note: Bot akan ambil 2 kata pertama setelah command."""
+        bot.reply_to(message, format_text, parse_mode=None)
+    except:
+        pass
+
+@bot.message_handler(commands=['formatreport'])
+def handle_format_report(message):
+    try:
+        format_text = """📋 (PILIH SALAH SATU KATEGORI - JANGAN TYPO)
+
+REPORT CROSSBANK
+REPORT MISTAKE
+REPORT FEE
+REPORT PENDINGAN
+REPORT PROCESS PENDINGAN
+REPORT REFUND
+
+FORMAT:
+ASET: BTC (sesuaikan)
+USER ID: LAPARBANG123 (sesuaikan)
+BANK MEMBER: BCA DONALD BEBEK 123456789 (sesuaikan)
+BANK ASSET: BCA MICKEY MOUSE 987654321 (sesuaikan)
+NO TICKET: D123456/W123456 (sesuaikan)
+AMOUNT: 50.000 (sesuaikan)
+CASE: Keterangan (sesuaikan)
+OFFICER: USER ID (punya kamu)
+
+Contoh:
+REPORT CROSSBANK
+ASET: BTC (sesuaikan)
+USER ID: LAPARBANG123 (sesuaikan)
+BANK MEMBER: BCA DONALD BEBEK 123456789 (sesuaikan)
+BANK ASSET: BCA MICKEY MOUSE 987654321 (sesuaikan)
+NO TICKET: D123456/W123456 (sesuaikan)
+AMOUNT: 50.000 (sesuaikan)
+CASE: KHILAF
+OFFICER: USER ID (punya kamu)"""
+        bot.reply_to(message, format_text, parse_mode=None)
+    except:
+        pass
+
+@bot.message_handler(commands=['report'])
+def handle_report_command(message):
+    try:
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("📋 CROSSBANK", callback_data="report_crossbank"),
+            types.InlineKeyboardButton("⏳ PENDINGAN", callback_data="report_pendingan"),
+            types.InlineKeyboardButton("🔄 PROCESS PENDINGAN", callback_data="report_process_pendingan"),
+            types.InlineKeyboardButton("❌ MISTAKE", callback_data="report_mistake"),
+            types.InlineKeyboardButton("↩️ REFUND", callback_data="report_refund"),
+            types.InlineKeyboardButton("💰 FEE", callback_data="report_fee")
+        )
+        bot.reply_to(
+            message,
+            "📊 *PILIH JENIS REPORT:*\n\nAtau ketik langsung:\n• REPORT CROSSBANK\n• REPORT PENDINGAN\n• REPORT MISTAKE\n• dll...\n\nUntuk format lengkap: /formatreport",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+    except:
+        pass
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('report_'))
+def handle_report_type(call):
+    try:
+        report_type = call.data.replace('report_', '')
+        formats = {
+            'crossbank': "\n📋 *FORMAT REPORT CROSSBANK*\n\nREPORT CROSSBANK\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Fraud\nOFFICER: John Doe",
+            'pendingan': "\n⏳ *FORMAT REPORT PENDINGAN*\n\nREPORT PENDINGAN\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Input Pendingan Deposit\nOFFICER: John Doe",
+            'process_pendingan': "\n🔄 *FORMAT REPORT PROCESS PENDINGAN*\n\nREPORT PROCESS PENDINGAN\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Proses Pendingan Deposit\nOFFICER: John Doe",
+            'mistake': "\n❌ *FORMAT REPORT MISTAKE*\n\nREPORT MISTAKE\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Kesalahan Input Data\nOFFICER: John Doe",
+            'refund': "\n↩️ *FORMAT REPORT REFUND*\n\nREPORT REFUND\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Pengembalian Dana\nOFFICER: John Doe",
+            'fee': "\n💰 *FORMAT REPORT FEE*\n\nREPORT FEE\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Biaya Admin/Operasional\nOFFICER: John Doe"
+        }
+        bot.edit_message_text(
+            formats[report_type] + "\n\n*Kirim pesan dengan format di atas*",
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode='Markdown'
+        )
+        bot.answer_callback_query(call.id, f"Format {report_type.upper()}")
+    except:
+        try:
+            bot.answer_callback_query(call.id, "⚠️ Message sudah dihapus")
+        except:
+            pass
+
+# ========== HANDLER REPORT BERBAGAI JENIS ==========
+@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT CROSSBANK'))
+def handle_crossbank_message(message):
+    handle_report_generic(message, 'CROSSBANK')
+
+@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT PENDINGAN'))
+def handle_pendingan_message(message):
+    handle_report_generic(message, 'PENDINGAN')
+
+@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT PROCESS PENDINGAN'))
+def handle_process_pendingan_message(message):
+    handle_report_generic(message, 'PROCESS PENDINGAN')
+
+@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT MISTAKE'))
+def handle_mistake_message(message):
+    handle_report_generic(message, 'MISTAKE')
+
+@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT REFUND'))
+def handle_refund_message(message):
+    handle_report_generic(message, 'REFUND')
+
+@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT FEE'))
+def handle_fee_message(message):
+    handle_report_generic(message, 'FEE')
+
+# ========== HANDLER RESET PASSWORD ==========
+@bot.message_handler(func=lambda m: m.text and not m.forward_from and any(
+    cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']
+))
+def handle_reset_only_text(message):
+    try:
+        text = message.text.strip()
+        first_line = text.split('\n')[0]
+        parts = first_line.split()
+        if len(parts) < 3:
+            return
+        user_id = parts[1]
+        asset = parts[2]
+        logger.info(f"📩 Reset request: {user_id} {asset}")
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
+            types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
+        )
+        bot.reply_to(
+            message,
+            f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+    except:
+        pass
+
+@bot.message_handler(content_types=['photo', 'document', 'video', 'audio', 'voice'])
+def ignore_all_media(message):
+    pass
+
+# ========== CALLBACK HANDLER UNTUK RESET ==========
+@bot.callback_query_handler(func=lambda call: call.data.startswith('ok_') or call.data.startswith('no_'))
+def handle_reset_callback(call):
+    try:
+        if call.data.startswith('ok_'):
+            _, cs_id, user_id, asset = call.data.split('_')
+            password = buat_password()
+            bot.send_message(call.message.chat.id, f"{user_id} - {asset}\nPassword baru : {password}")
+            bot.edit_message_text(
+                f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`",
+                call.message.chat.id,
+                call.message.message_id,
+                parse_mode='Markdown'
+            )
+            bot.answer_callback_query(call.id, "✅ Password dikirim")
+        elif call.data.startswith('no_'):
+            bot.send_message(call.message.chat.id, "❌ Permintaan ditolak Captain !!")
+            bot.edit_message_text("❌ *REQUEST DITOLAK*", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+            bot.answer_callback_query(call.id, "❌ Ditolak")
+    except:
+        try:
+            bot.answer_callback_query(call.id, "⚠️ Action gagal")
+        except:
+            pass
+
 # ========== BOT RUNNER ==========
 def run_bot():
     logger.info("🤖 Starting Telegram Bot...")
@@ -432,18 +674,18 @@ def run_bot():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🤖 X-SISTEM BOT - COMPLETE DATA RECORDING")
+    print("🤖 X-SISTEM BOT - COMPLETE FEATURES")
     print(f"📊 Spreadsheet ID: {SPREADSHEET_ID}")
     print(f"📄 Target sheet: {TARGET_SHEET_NAME}")
-    print("📝 Recording data to columns (new row for each injection):")
+    print("📝 Suntik Bank Features:")
     print("   D: NO REK BANK (No Rek Bank)")
     print("   G: NOMINAL SUNTIK (Nominal Suntik)")
     print("   H: SALDO AKHIR BANK (Saldo Akhir Bank)")
     print("   K: APPROVER (Admin)")
-    print("🚫 B: DATE (NOT recorded - left empty)")
-    print("🚫 C: ASSET (NOT recorded - left empty)")
-    print("🚫 E: JENIS BANK (NOT recorded - left empty)")
-    print("🚫 F: NAMA REK BANK (NOT recorded - left empty)")
+    print("🔄 Reset Password Features:")
+    print("   /reset [ID] [ASSET] - Reset password")
+    print("📊 Report Features:")
+    print("   /report - Pilih jenis report")
     print("👑 Admin: @Vingeance @bangjoshh")
     print("=" * 60)
     
