@@ -155,16 +155,7 @@ def handle_screenshot_photo(message):
         bot.reply_to(
             message,
             "📸 **Screenshot saldo diterima!**\n"
-            "✅ Sekarang kirim **format teks suntik bank** dalam **5 menit**.\n\n"
-            "📋 **Format yang diminta:**\n"
-            "Tolong suntik dari rek Tampungan KPS ke rek berikut\n\n"
-            "Wallet Addres : \n"
-            "No Rek Bank : \n"
-            "Jenis Bank : \n"
-            "Nama Bank : \n"
-            "Nominal Suntik : \n"
-            "Saldo Akhir Bank : \n"
-            "Asset : "
+            "✅ Sekarang kirim **format teks suntik bank**."
         )
         
     except Exception as e:
@@ -179,16 +170,30 @@ def handle_injection_request(message):
     officer = message.from_user.username or message.from_user.first_name
     msg_text = message.text
     
-    # Parse wallet dan asset
-    wallet_match = re.search(r"Wallet Addres :\s*(.+)", msg_text)
-    asset_match = re.search(r"Asset :\s*(.+)", msg_text)
+    # Parse SEMUA data dari officer (bukan dari spreadsheet)
+    # Format yang officer kirim:
+    # Wallet Addres : 
+    # No Rek Bank : 
+    # Jenis Bank : 
+    # Nama Bank : 
+    # Nominal Suntik : 
+    # Saldo Akhir Bank : 
+    # Asset :
     
-    if not wallet_match or not asset_match:
-        bot.reply_to(message, "❌ Format salah! Pastikan ada Wallet Address dan Asset.")
-        return
+    patterns = {
+        'wallet': r"Wallet Addres :\s*(.+)",
+        'no_rek': r"No Rek Bank :\s*(.+)",
+        'jenis_bank': r"Jenis Bank :\s*(.+)",
+        'nama_bank': r"Nama Bank :\s*(.+)",
+        'nominal': r"Nominal Suntik :\s*(.+)",
+        'saldo_akhir': r"Saldo Akhir Bank :\s*(.+)",
+        'asset': r"Asset :\s*(.+)"
+    }
     
-    wallet = wallet_match.group(1).strip()
-    asset = asset_match.group(1).strip()
+    extracted_data = {}
+    for key, pattern in patterns.items():
+        match = re.search(pattern, msg_text, re.IGNORECASE)
+        extracted_data[key] = match.group(1).strip() if match else "N/A"
     
     # Cek apakah ada screenshot dari user ini (5 menit terakhir)
     screenshot_data = None
@@ -202,52 +207,29 @@ def handle_injection_request(message):
                 screenshot_msg_id = msg_id
                 break
     
-    # Ambil data dari spreadsheet
-    sheet = get_sheet()
-    if not sheet:
-        bot.reply_to(message, "❌ Gagal konek ke spreadsheet.")
-        return
-    
-    try:
-        rek = sheet.acell('D3').value or "N/A"
-        nama_bank = sheet.acell('E3').value or "N/A"
-        jenis_bank = sheet.acell('F3').value or "N/A"
-        nominal = sheet.acell('G3').value or "N/A"
-        saldo_akhir = sheet.acell('H3').value or "N/A"
-    except Exception as e:
-        print(f"Spreadsheet error: {e}")
-        bot.reply_to(message, "❌ Gagal baca data spreadsheet.")
-        return
-    
     # Simpan data sementara
     pending_injections[message.message_id] = {
-        'wallet': wallet,
-        'asset': asset,
+        'wallet': extracted_data['wallet'],
+        'asset': extracted_data['asset'],
         'officer': officer,
-        'rek': rek,
-        'nama_bank': nama_bank,
-        'jenis_bank': jenis_bank,
-        'nominal': nominal,
-        'saldo_akhir': saldo_akhir,
+        'no_rek': extracted_data['no_rek'],
+        'jenis_bank': extracted_data['jenis_bank'],
+        'nama_bank': extracted_data['nama_bank'],
+        'nominal': extracted_data['nominal'],
+        'saldo_akhir': extracted_data['saldo_akhir'],
         'original_msg_id': message.message_id,
         'has_screenshot': screenshot_data is not None,
         'screenshot_path': screenshot_data['file_path'] if screenshot_data else None,
         'screenshot_msg_id': screenshot_msg_id
     }
     
-    # Buat pesan approval (dengan/tanpa screenshot info)
-    screenshot_note = "📸 **+ SCREENSHOT TERLAMPIR**" if screenshot_data else ""
-    
+    # Buat pesan approval sesuai format yang diminta
     approval_msg = (
-        "💉 **PERMINTAAN SUNTIK BANK**\n"
-        f"{screenshot_note}\n"
-        f"👤 Officer: {officer}\n"
-        f"🏦 Bank: {nama_bank} ({jenis_bank})\n"
-        f"🔢 Rekening: {rek}\n"
-        f"💰 Nominal: {nominal}\n"
-        f"📊 Saldo Akhir: {saldo_akhir}\n"
-        f"👛 Wallet: {wallet}\n"
-        f"📌 Asset: {asset}\n\n"
+        "💉 **PERMINTAAN SUNTIK BANK**\n\n"
+        f"JENIS BANK : {extracted_data['jenis_bank']}\n"
+        f"📊 Saldo Akhir: {extracted_data['saldo_akhir']}\n"
+        f"No Rek Bank : {extracted_data['no_rek']}\n"
+        f"📌 Asset: {extracted_data['asset']}\n\n"
         "Konfirmasi Admin:"
     )
     
@@ -300,6 +282,7 @@ def handle_injection_callback(call):
             approver_name = "Alvin" if admin == "Vingeance" else "Joshua"
             
             try:
+                sheet = get_sheet()
                 # Update B3 dengan timestamp
                 sheet.update('B3', [[current_time]])
                 # Update K3 dengan nama approver
@@ -309,36 +292,12 @@ def handle_injection_callback(call):
                 print(f"❌ Spreadsheet error: {e}")
             # ========== END UPDATE ==========
             
-            # Jika ada screenshot, buat instruksi forward ke WhatsApp
-            forward_instruction = ""
-            if data.get('has_screenshot') and data.get('screenshot_path'):
-                forward_instruction = (
-                    "\n\n📤 **UNTUK FORWARD KE WHATSAPP:**\n"
-                    "1. **Download screenshot** dari Telegram (yang sudah dikirim sebelumnya)\n"
-                    "2. **Copy teks di bawah ini**\n"
-                    "3. **Paste ke grup WhatsApp** beserta screenshot\n\n"
-                    "--- TEKS UNTUK WHATSAPP ---\n"
-                    f"💉 **SUNTIK BANK - DISETUJUI**\n"
-                    f"🕐 {current_time}\n"
-                    f"👤 Officer: {data['officer']}\n"
-                    f"🏦 Bank: {data['nama_bank']} ({data['jenis_bank']})\n"
-                    f"🔢 Rek: {data['rek']}\n"
-                    f"💰 Nominal: {data['nominal']}\n"
-                    f"📊 Saldo Akhir: {data['saldo_akhir']}\n"
-                    f"👛 Wallet: {data['wallet']}\n"
-                    f"📌 Asset: {data['asset']}\n"
-                    f"✅ Disetujui oleh: {approver_name}\n"
-                    "--- AKHIR TEKS ---"
-                )
-            
-            # Edit pesan dengan instruksi forward
+            # Format pesan setelah approve sesuai permintaan
             bot.edit_message_text(
-                f"✅ **DISETUJUI** oleh @{admin}\n"
-                f"⏰ Timestamp: {current_time}\n"
+                f"✅ DISETUJUI oleh @{admin}\n"
                 f"✍️ Approver: {approver_name}\n\n"
-                f"Bank: {data['nama_bank']}\n"
-                f"Nominal: {data['nominal']}"
-                f"{forward_instruction}",
+                f"Bank: {data['jenis_bank']}\n"
+                f"Nominal: {data['nominal']}",
                 GROUP_ID,
                 call.message.message_id,
                 parse_mode='Markdown'
@@ -602,7 +561,7 @@ def run_bot():
     bot.polling(
         none_stop=True,
         timeout=30,
-        skip_pending=True
+        skip_pending=False  # Biarkan False untuk hindari conflict
     )
 
 if __name__ == "__main__":
