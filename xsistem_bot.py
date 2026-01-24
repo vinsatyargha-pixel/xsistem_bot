@@ -28,83 +28,65 @@ bot = telebot.TeleBot(TOKEN)
 ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]
 GROUP_ID = -1003855148883
 SPREADSHEET_ID = "1_ix7oF2_KPXVnkQP9ScFa98zSBBf6-eLPC9Xzprm7bE"
+TARGET_SHEET_NAME = "X"  # <-- NAMA SHEET YANG BENAR
 
 pending_injections = {}
 
-# ========== GOOGLE SHEETS DEBUG ==========
+# ========== GOOGLE SHEETS UNTUK SHEET "X" ==========
 def get_sheet():
-    """Debug Google Sheets connection"""
+    """Get the specific sheet named 'X'"""
     try:
         SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
         
-        logger.info("=" * 50)
-        logger.info("🔧 GOOGLE SHEETS DEBUG START")
+        logger.info(f"🔧 Connecting to Google Sheets...")
+        logger.info(f"   Spreadsheet ID: {SPREADSHEET_ID}")
+        logger.info(f"   Target sheet: '{TARGET_SHEET_NAME}'")
         
-        # Cek file credentials
-        if not os.path.exists('credentials.json'):
-            logger.warning("⚠️ credentials.json file NOT FOUND locally")
-            
-            # Cek env var di Render
-            if os.getenv("GOOGLE_CREDENTIALS_JSON"):
-                logger.info("✅ GOOGLE_CREDENTIALS_JSON env var found")
-                try:
-                    import json
-                    creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
-                    creds_dict = json.loads(creds_json)
-                    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-                    logger.info("✅ Credentials loaded from env var")
-                except Exception as e:
-                    logger.error(f"❌ Failed to parse env var credentials: {e}")
-                    return None
-            else:
-                logger.error("❌ No credentials found anywhere")
-                logger.info("Please add GOOGLE_CREDENTIALS_JSON to Render environment variables")
-                return None
+        # Load credentials
+        if os.getenv("GOOGLE_CREDENTIALS_JSON"):
+            logger.info("✅ Using credentials from env var")
+            import json
+            creds_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
+            creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         else:
-            logger.info("✅ credentials.json file found locally")
+            logger.info("✅ Using credentials from file")
             creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
         
         # Authorize
         client = gspread.authorize(creds)
-        logger.info("✅ Google Sheets client authorized")
+        logger.info("✅ Google Sheets authorized")
         
         # Buka spreadsheet
-        try:
-            spreadsheet = client.open_by_key(SPREADSHEET_ID)
-            logger.info(f"✅ Spreadsheet opened: {spreadsheet.title}")
-        except Exception as e:
-            logger.error(f"❌ Failed to open spreadsheet: {e}")
-            logger.info("Possible issues:")
-            logger.info("1. Wrong SPREADSHEET_ID")
-            logger.info("2. Service account doesn't have access")
-            logger.info(f"3. Current SPREADSHEET_ID: {SPREADSHEET_ID}")
-            return None
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        logger.info(f"✅ Spreadsheet opened: {spreadsheet.title}")
         
-        # Ambil sheet pertama (atau sheet tertentu)
-        try:
-            sheet = spreadsheet.sheet1  # Sheet pertama (default)
-            logger.info(f"✅ Sheet accessed: {sheet.title}")
-            
-            # Test read
-            test_value = sheet.acell('A1').value
-            logger.info(f"📊 Test read cell A1: '{test_value}'")
-            
-            # Cek apakah B3 dan K3 ada
-            b3_before = sheet.acell('B3').value
-            k3_before = sheet.acell('K3').value
-            logger.info(f"📊 B3 before: '{b3_before}', K3 before: '{k3_before}'")
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to access sheet: {e}")
-            return None
+        # LIST SEMUA SHEET YANG ADA (untuk debug)
+        all_sheets = spreadsheet.worksheets()
+        logger.info(f"📋 Available sheets in spreadsheet:")
+        for s in all_sheets:
+            logger.info(f"   - '{s.title}' (id: {s.id})")
         
-        logger.info("🔧 GOOGLE SHEETS DEBUG END")
-        logger.info("=" * 50)
+        # CARI SHEET DENGAN NAMA "X" (case insensitive)
+        target_sheet = None
+        for sheet in all_sheets:
+            if sheet.title.strip().upper() == TARGET_SHEET_NAME.upper():
+                target_sheet = sheet
+                logger.info(f"✅ Found target sheet: '{sheet.title}'")
+                break
         
-        return sheet
+        if not target_sheet:
+            logger.error(f"❌ Sheet '{TARGET_SHEET_NAME}' not found!")
+            logger.info("⚠️ Using first sheet as fallback")
+            target_sheet = spreadsheet.sheet1
+        
+        # Test connection
+        test_cell = target_sheet.acell('A1').value
+        logger.info(f"📊 Test read A1: '{test_cell}'")
+        
+        return target_sheet
         
     except Exception as e:
-        logger.error(f"❌ Google Sheets setup error: {e}", exc_info=True)
+        logger.error(f"❌ Google Sheets error: {e}", exc_info=True)
         return None
 
 # ========== FUNGSI SUNIK BANK ==========
@@ -150,7 +132,6 @@ def send_admin_confirmation(data, original_message):
         parse_mode='Markdown'
     )
     
-    # Jika ada photo, kirim terpisah
     if data['is_photo'] and data['photo_id']:
         try:
             bot.send_photo(GROUP_ID, data['photo_id'], caption=f"📸 Screenshot dari {data['officer']}")
@@ -207,7 +188,7 @@ def handle_injection_request(message):
     send_admin_confirmation(injection_data, message)
     bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin untuk konfirmasi.")
 
-# ========== CALLBACK HANDLER DENGAN SPREADSHEET DEBUG ==========
+# ========== CALLBACK HANDLER ==========
 @bot.callback_query_handler(func=lambda call: call.data.startswith('inj_'))
 def handle_injection_callback(call):
     try:
@@ -235,36 +216,34 @@ def handle_injection_callback(call):
         if action == "approve":
             logger.info("🔄 Processing APPROVE...")
             
-            # UPDATE SPREADSHEET
+            # UPDATE SPREADSHEET SHEET "X"
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             approver_name = "Alvin" if call.from_user.username == "Vingeance" else "Joshua"
             
-            logger.info(f"📊 Attempting to update spreadsheet...")
-            logger.info(f"   Time: {current_time}")
-            logger.info(f"   Approver: {approver_name}")
+            logger.info(f"📊 Updating sheet '{TARGET_SHEET_NAME}'...")
+            logger.info(f"   B3 → {current_time}")
+            logger.info(f"   K3 → {approver_name}")
             
             sheet = get_sheet()
             if sheet:
                 try:
-                    # Update B3
-                    logger.info(f"📝 Updating B3 to: {current_time}")
+                    # Update B3 di sheet "X"
                     sheet.update(range_name='B3', values=[[current_time]])
-                    logger.info("✅ B3 updated")
+                    logger.info("✅ B3 updated in sheet 'X'")
                     
-                    # Update K3
-                    logger.info(f"📝 Updating K3 to: {approver_name}")
+                    # Update K3 di sheet "X"
                     sheet.update(range_name='K3', values=[[approver_name]])
-                    logger.info("✅ K3 updated")
+                    logger.info("✅ K3 updated in sheet 'X'")
                     
                     # Verifikasi
-                    b3_after = sheet.acell('B3').value
-                    k3_after = sheet.acell('K3').value
-                    logger.info(f"✅ Verification - B3: '{b3_after}', K3: '{k3_after}'")
+                    b3_value = sheet.acell('B3').value
+                    k3_value = sheet.acell('K3').value
+                    logger.info(f"✅ Verification - B3: '{b3_value}', K3: '{k3_value}'")
                     
                 except Exception as e:
-                    logger.error(f"❌ Failed to update spreadsheet: {e}", exc_info=True)
+                    logger.error(f"❌ Failed to update sheet 'X': {e}", exc_info=True)
             else:
-                logger.error("❌ Failed to connect to Google Sheets")
+                logger.error("❌ Failed to connect to sheet 'X'")
             
             # Edit pesan di group
             new_text = (
@@ -282,7 +261,7 @@ def handle_injection_callback(call):
                 parse_mode='Markdown'
             )
             
-            bot.answer_callback_query(call.id, "✅ Disetujui & tercatat di spreadsheet")
+            bot.answer_callback_query(call.id, "✅ Disetujui & tercatat di spreadsheet (sheet X)")
             
         elif action == "decline":
             logger.info("🔄 Processing DECLINE...")
@@ -315,7 +294,7 @@ def run_bot():
     logger.info("🔧 Testing Google Sheets connection on startup...")
     sheet = get_sheet()
     if sheet:
-        logger.info("✅ Google Sheets connection OK")
+        logger.info(f"✅ Connected to sheet: '{sheet.title}'")
     else:
         logger.error("❌ Google Sheets connection FAILED")
     
@@ -323,8 +302,9 @@ def run_bot():
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("🤖 X-SISTEM BOT - SPREADSHEET DEBUG VERSION")
+    print("🤖 X-SISTEM BOT - TARGETING SHEET 'X'")
     print(f"📊 Spreadsheet ID: {SPREADSHEET_ID}")
+    print(f"📄 Target sheet: {TARGET_SHEET_NAME}")
     print("👑 Admin: @Vingeance @bangjoshh")
     print("=" * 50)
     
