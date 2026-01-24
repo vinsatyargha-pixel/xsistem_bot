@@ -138,10 +138,8 @@ def update_spreadsheet_all_data(data, approver_name):
             logger.error("❌ Sheet not found")
             return False
         
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # MAPPING DATA KE KOLOM:
-        # B3: Timestamp
         # D3: No Rek Bank
         # E3: Jenis Bank  
         # F3: Nama Bank
@@ -150,7 +148,6 @@ def update_spreadsheet_all_data(data, approver_name):
         # K3: Approver (Admin)
         
         updates = [
-            ('B3', [[current_time]]),          # Timestamp
             ('D3', [[data['no_rek']]]),        # No Rek Bank
             ('E3', [[data['jenis_bank']]]),    # Jenis Bank
             ('F3', [[data['nama_bank']]]),     # Nama Bank
@@ -385,3 +382,4 @@ if __name__ == "__main__":
     
     # Jalankan bot (main thread)
     run_bot()
+
