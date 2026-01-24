@@ -17,8 +17,8 @@ from datetime import datetime
 TOKEN = "8087735462:AAGII-XvO3hJy3YgDd3b0vjiIHjnQCn4Ej4"
 bot = telebot.TeleBot(TOKEN)
 
-# Config untuk suntik bank
-ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]  # Alvin & Joshua - sesuaikan jika berbeda
+# Config untuk suntik bank - GUNAKAN USERNAME TELEGRAM (dengan @)
+ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]  # Alvin & Joshua - USERNAME TELEGRAM TANPA @
 GROUP_ID = -1003855148883  # ID grup X - INTERNAL WD
 SPREADSHEET_ID = "1_ix7oF2_KPXVnkQP9ScFa98zSBBf6-eLPC9Xzprm7bE"
 
@@ -154,21 +154,21 @@ def send_admin_confirmation(data, original_message):
         types.InlineKeyboardButton("❌ DECLINE", callback_data=f"inj_decline_{data['message_id']}")
     )
     
-    # Kirim pesan ke grup admin
+    # Kirim pesan ke grup admin - TAMBAHKAN TAG ADMIN
     if data['is_photo']:
-        # Kirim photo + caption
+        # Kirim photo + caption dan tag admin
         sent_msg = bot.send_photo(
             GROUP_ID,
             data['photo_id'],
-            caption=approval_msg,
+            caption=approval_msg + f"\n\n👑 Admin: @Vingeance @bangjoshh",
             reply_markup=markup,
             parse_mode='Markdown'
         )
     else:
-        # Kirim text saja
+        # Kirim text saja dan tag admin
         sent_msg = bot.send_message(
             GROUP_ID,
-            approval_msg,
+            approval_msg + f"\n\n👑 Admin: @Vingeance @bangjoshh",
             reply_markup=markup,
             parse_mode='Markdown'
         )
@@ -246,13 +246,24 @@ def handle_injection_request(message):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('inj_'))
 def handle_injection_callback(call):
-    """Handle tombol approve/decline suntik bank"""
+    """Handle tombol approve/decline suntik bank - DENGAN CEK ADMIN YANG BENAR"""
     try:
         action, msg_id = call.data.split('_')[1], int(call.data.split('_')[2])
         admin = call.from_user.username
         
-        # Cek admin
-        if admin not in ADMIN_USERNAMES:
+        # CEK ADMIN DENGAN BENAR - CASE INSENSITIVE
+        if admin is None:
+            bot.answer_callback_query(call.id, "❌ Username tidak ditemukan. Pastikan kamu punya username Telegram.")
+            return
+            
+        # Cek apakah username admin (case insensitive)
+        is_admin = False
+        for admin_name in ADMIN_USERNAMES:
+            if admin.lower() == admin_name.lower():
+                is_admin = True
+                break
+        
+        if not is_admin:
             bot.answer_callback_query(call.id, "❌ Hanya admin yang bisa approve.")
             return
         
@@ -264,7 +275,7 @@ def handle_injection_callback(call):
         if action == "approve":
             # UPDATE SPREADSHEET
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            approver_name = "Alvin" if admin == "Vingeance" else "Joshua"
+            approver_name = "Alvin" if admin.lower() == "vingeance" else "Joshua"
             
             try:
                 sheet = get_sheet()
@@ -546,6 +557,7 @@ if __name__ == "__main__":
     print("📱 /reset [ID] [ASSET] - Reset password")
     print("📊 /report - Pilih jenis report")
     print("💉 Suntik Bank - Kirim format suntik + screenshot SEKALIGUS")
+    print("👑 Admin yang bisa approve: @Vingeance @bangjoshh")
     print("🌐 Web server: http://0.0.0.0:${PORT}")
     print("⏰ Auto-pinger: Every 8 minutes")
     print("=" * 50)
