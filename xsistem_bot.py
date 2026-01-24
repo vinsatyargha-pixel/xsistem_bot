@@ -136,7 +136,7 @@ def parse_injection_text(text):
         'nama_bank': r"Nama Bank\s*:\s*(.+)",         # → F (kolom F) - TIDAK DIPAKAI
         'nominal': r"Nominal Suntik\s*:\s*(.+)",      # → G (kolom G)
         'saldo_akhir': r"Saldo Akhir Bank\s*:\s*(.+)", # → H (kolom H)
-        'asset': r"Asset\s*:\s*(.+)",                 # → C (kolom C)
+        'asset': r"Asset\s*:\s*(.+)",                 # → C (kolom C) - TIDAK DIPAKAI
         'wallet': r"Wallet Addres\s*:\s*(.+)",        # → (info saja)
         'officer': r"OFFICER\s*:\s*(.+)"              # → Officer yang request
     }
@@ -160,21 +160,14 @@ def update_spreadsheet_all_data(data, approver_name):
         target_row = find_empty_row(sheet)
         logger.info(f"📊 Found empty row: {target_row}")
         
-        # Format tanggal untuk kolom B (DATE)
-        current_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        
         # MAPPING DATA KE KOLOM:
-        # B: DATE (timestamps)
-        # C: ASET (Asset)
         # D: NO REK BANK (No Rek Bank)
         # G: NOMINAL SUNTIK (Nominal Suntik)
         # H: SALDO AKHIR BANK (Saldo Akhir Bank)
         # K: APPROVER (Admin)
-        # NOTE: Kolom E (JENIS BANK) dan F (NAMA REK BANK) TIDAK DIISI
+        # NOTE: Kolom B (DATE), C (ASSET), E (JENIS BANK), dan F (NAMA REK BANK) TIDAK DIISI
         
         updates = [
-            ('B', [[current_time]]),                 # Timestamp
-            ('C', [[data['asset']]]),                # Asset
             ('D', [[data['no_rek']]]),               # No Rek Bank
             ('G', [[data['nominal']]]),              # Nominal Suntik
             ('H', [[data['saldo_akhir']]]),          # Saldo Akhir Bank
@@ -388,12 +381,12 @@ if __name__ == "__main__":
     print(f"📊 Spreadsheet ID: {SPREADSHEET_ID}")
     print(f"📄 Target sheet: {TARGET_SHEET_NAME}")
     print("📝 Recording data to columns (new row for each injection):")
-    print("   B: DATE (timestamps)")
-    print("   C: ASET (Asset)")
     print("   D: NO REK BANK (No Rek Bank)")
     print("   G: NOMINAL SUNTIK (Nominal Suntik)")
     print("   H: SALDO AKHIR BANK (Saldo Akhir Bank)")
     print("   K: APPROVER (Admin)")
+    print("🚫 B: DATE (NOT recorded - left empty)")
+    print("🚫 C: ASSET (NOT recorded - left empty)")
     print("🚫 E: JENIS BANK (NOT recorded - left empty)")
     print("🚫 F: NAMA REK BANK (NOT recorded - left empty)")
     print("👑 Admin: @Vingeance @bangjoshh")
