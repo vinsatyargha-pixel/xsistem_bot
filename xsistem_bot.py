@@ -113,146 +113,136 @@ def parse_report_text(text):
             data[key] = value
     return data
 
-# ========== HANDLER UNTUK SCREENSHOT SUNIK BANK ==========
-@bot.message_handler(content_types=['photo'])
-def handle_screenshot_photo(message):
-    """Handle screenshot khusus untuk suntik bank"""
-    user_id = message.from_user.id
-    officer = message.from_user.username or message.from_user.first_name
-    
-    try:
-        # Download photo
-        file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        
-        # Simpan sementara
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
-        temp_file.write(downloaded_file)
-        temp_file.close()
-        
-        # Simpan di storage
-        screenshot_storage[message.message_id] = {
-            'file_path': temp_file.name,
-            'user_id': user_id,
-            'timestamp': datetime.now(),
-            'officer': officer
-        }
-        
-        # Cleanup old screenshots (lebih dari 10 menit)
-        current_time = datetime.now()
-        for msg_id in list(screenshot_storage.keys()):
-            storage_time = screenshot_storage[msg_id]['timestamp']
-            if (current_time - storage_time).seconds > 600:  # 10 menit
-                try:
-                    os.remove(screenshot_storage[msg_id]['file_path'])
-                    del screenshot_storage[msg_id]
-                except:
-                    pass
-        
-        print(f"📸 Screenshot saved for {officer} (user_id: {user_id})")
-        
-        # Reply instruksi
-        bot.reply_to(
-            message,
-            "📸 **Screenshot saldo diterima!**\n"
-            "✅ Sekarang kirim **format teks suntik bank**."
-        )
-        
-    except Exception as e:
-        print(f"❌ Error processing screenshot: {e}")
-        bot.reply_to(message, "❌ Gagal menyimpan screenshot. Coba kirim ulang gambar.")
-
-# ========== FITUR BARU: SUNIK BANK DENGAN SCREENSHOT ==========
-@bot.message_handler(func=lambda m: "Tolong suntik dari rek Tampungan KPS" in m.text)
-def handle_injection_request(message):
-    """Handle permintaan suntik bank dengan/tanpa screenshot"""
-    user_id = message.from_user.id
-    officer = message.from_user.username or message.from_user.first_name
-    msg_text = message.text
-    
-    # Parse SEMUA data dari officer (bukan dari spreadsheet)
-    # Format yang officer kirim:
-    # Wallet Addres : 
-    # No Rek Bank : 
-    # Jenis Bank : 
-    # Nama Bank : 
-    # Nominal Suntik : 
-    # Saldo Akhir Bank : 
-    # Asset :
-    
+# ========== FUNGSI BARU: PARSING TEXT SUNIK BANK ==========
+def parse_injection_text(text):
+    """Parsing format suntik bank dari teks user"""
     patterns = {
-        'wallet': r"Wallet Addres :\s*(.+)",
-        'no_rek': r"No Rek Bank :\s*(.+)",
-        'jenis_bank': r"Jenis Bank :\s*(.+)",
-        'nama_bank': r"Nama Bank :\s*(.+)",
-        'nominal': r"Nominal Suntik :\s*(.+)",
-        'saldo_akhir': r"Saldo Akhir Bank :\s*(.+)",
-        'asset': r"Asset :\s*(.+)"
+        'no_rek': r"No Rek Bank\s*:\s*(.+)",
+        'jenis_bank': r"Jenis Bank\s*:\s*(.+)",
+        'nama_bank': r"Nama Bank\s*:\s*(.+)",
+        'nominal': r"Nominal Suntik\s*:\s*(.+)",
+        'saldo_akhir': r"Saldo Akhir Bank\s*:\s*(.+)",
+        'asset': r"Asset\s*:\s*(.+)"
     }
     
-    extracted_data = {}
+    extracted = {}
     for key, pattern in patterns.items():
-        match = re.search(pattern, msg_text, re.IGNORECASE)
-        extracted_data[key] = match.group(1).strip() if match else "N/A"
+        match = re.search(pattern, text, re.IGNORECASE)
+        extracted[key] = match.group(1).strip() if match else "N/A"
     
-    # Cek apakah ada screenshot dari user ini (5 menit terakhir)
-    screenshot_data = None
-    screenshot_msg_id = None
+    return extracted
+
+def send_admin_confirmation(data, original_message):
+    """Kirim format konfirmasi ke admin group"""
+    text_data = data['text_data']
     
-    for msg_id, data in list(screenshot_storage.items()):
-        if data['user_id'] == user_id:
-            time_diff = (datetime.now() - data['timestamp']).seconds
-            if time_diff < 300:  # 5 menit
-                screenshot_data = data
-                screenshot_msg_id = msg_id
-                break
-    
-    # Simpan data sementara
-    pending_injections[message.message_id] = {
-        'wallet': extracted_data['wallet'],
-        'asset': extracted_data['asset'],
-        'officer': officer,
-        'no_rek': extracted_data['no_rek'],
-        'jenis_bank': extracted_data['jenis_bank'],
-        'nama_bank': extracted_data['nama_bank'],
-        'nominal': extracted_data['nominal'],
-        'saldo_akhir': extracted_data['saldo_akhir'],
-        'original_msg_id': message.message_id,
-        'has_screenshot': screenshot_data is not None,
-        'screenshot_path': screenshot_data['file_path'] if screenshot_data else None,
-        'screenshot_msg_id': screenshot_msg_id
-    }
-    
-    # Buat pesan approval sesuai format yang diminta
+    # Format pesan sesuai permintaan ASLI
     approval_msg = (
         "💉 **PERMINTAAN SUNTIK BANK**\n\n"
-        f"JENIS BANK : {extracted_data['jenis_bank']}\n"
-        f"📊 Saldo Akhir: {extracted_data['saldo_akhir']}\n"
-        f"No Rek Bank : {extracted_data['no_rek']}\n"
-        f"📌 Asset: {extracted_data['asset']}\n\n"
-        "Konfirmasi Admin:"
+        f"JENIS BANK : {text_data['jenis_bank']}\n"
+        f"📊 Saldo Akhir: {text_data['saldo_akhir']}\n"
+        f"No Rek Bank : {text_data['no_rek']}\n"
+        f"📌 Asset: {text_data['asset']}\n\n"
+        "Konfirmasi Admin:\n\n"
+        "APPROVED atau DECLINE"
     )
     
     # Tombol Approve/Decline
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(
-        types.InlineKeyboardButton("✅ APPROVE", callback_data=f"inj_approve_{message.message_id}"),
-        types.InlineKeyboardButton("❌ DECLINE", callback_data=f"inj_decline_{message.message_id}")
+        types.InlineKeyboardButton("✅ APPROVED", callback_data=f"inj_approve_{data['message_id']}"),
+        types.InlineKeyboardButton("❌ DECLINE", callback_data=f"inj_decline_{data['message_id']}")
     )
     
-    # Kirim ke grup
-    bot.send_message(
-        GROUP_ID,
-        approval_msg,
-        reply_markup=markup,
-        parse_mode='Markdown'
-    )
+    # Kirim pesan ke grup admin
+    if data['is_photo']:
+        # Kirim photo + caption
+        sent_msg = bot.send_photo(
+            GROUP_ID,
+            data['photo_id'],
+            caption=approval_msg,
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+    else:
+        # Kirim text saja
+        sent_msg = bot.send_message(
+            GROUP_ID,
+            approval_msg,
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
     
-    reply_text = "✅ Permintaan telah dikirim ke admin."
-    if screenshot_data:
-        reply_text += "\n📸 Screenshot telah dilampirkan."
+    # Simpan ke pending_injections
+    pending_injections[data['message_id']] = {
+        **text_data,
+        'officer': data['officer'],
+        'user_id': data['user_id'],
+        'is_photo': data['is_photo'],
+        'photo_id': data['photo_id'],
+        'admin_message_id': sent_msg.message_id
+    }
+
+# ========== HANDLER UTAMA SUNIK BANK (TEXT + PHOTO SEKALIGUS) ==========
+@bot.message_handler(content_types=['photo'])
+def handle_photo_with_caption(message):
+    """Handle photo yang dikirim BERSAMA caption/text suntik bank"""
+    # Cek jika ada caption dengan trigger suntik
+    if message.caption and "Tolong suntik dari rek Tampungan KPS" in message.caption:
+        # Langsung proses suntik bank
+        msg_text = message.caption
+        
+        # Parsing data dari teks
+        parsed_data = parse_injection_text(msg_text)
+        
+        # Prepare data untuk pending
+        injection_data = {
+            'text_data': parsed_data,
+            'user_id': message.from_user.id,
+            'officer': message.from_user.username or message.from_user.first_name,
+            'message_id': message.message_id,
+            'is_photo': True,
+            'photo_id': message.photo[-1].file_id
+        }
+        
+        # Langsung kirim konfirmasi ke admin
+        send_admin_confirmation(injection_data, message)
+        
+        # Konfirmasi ke user
+        bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin untuk konfirmasi.")
+        return
     
-    bot.reply_to(message, reply_text)
+    # Jika photo tanpa caption/tanpa trigger suntik, abaikan
+    pass
+
+@bot.message_handler(func=lambda m: "Tolong suntik dari rek Tampungan KPS" in m.text)
+def handle_injection_request(message):
+    """Handle permintaan suntik bank dengan/tanpa screenshot dalam SATU KIRIMAN"""
+    
+    # Skip jika ini adalah pesan reset atau report
+    if any(cmd in message.text.lower() for cmd in ['/reset', '/repass', '/repas', 'report']):
+        return
+    
+    msg_text = message.text
+    
+    # Parsing data dari teks
+    parsed_data = parse_injection_text(msg_text)
+    
+    # Prepare data untuk pending
+    injection_data = {
+        'text_data': parsed_data,
+        'user_id': message.from_user.id,
+        'officer': message.from_user.username or message.from_user.first_name,
+        'message_id': message.message_id,
+        'is_photo': False,
+        'photo_id': None
+    }
+    
+    # Langsung kirim konfirmasi ke admin
+    send_admin_confirmation(injection_data, message)
+    
+    # Konfirmasi ke user
+    bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin untuk konfirmasi.")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('inj_'))
 def handle_injection_callback(call):
@@ -271,13 +261,8 @@ def handle_injection_callback(call):
             bot.answer_callback_query(call.id, "❌ Data tidak ditemukan.")
             return
         
-        sheet = get_sheet()
-        if not sheet:
-            bot.answer_callback_query(call.id, "❌ Gagal konek spreadsheet.")
-            return
-        
         if action == "approve":
-            # ========== UPDATE SPREADSHEET ==========
+            # UPDATE SPREADSHEET
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             approver_name = "Alvin" if admin == "Vingeance" else "Joshua"
             
@@ -290,14 +275,14 @@ def handle_injection_callback(call):
                 print(f"✅ Spreadsheet updated: B3={current_time}, K3={approver_name}")
             except Exception as e:
                 print(f"❌ Spreadsheet error: {e}")
-            # ========== END UPDATE ==========
             
-            # Format pesan setelah approve sesuai permintaan
+            # Format pesan setelah approve
             bot.edit_message_text(
                 f"✅ DISETUJUI oleh @{admin}\n"
                 f"✍️ Approver: {approver_name}\n\n"
                 f"Bank: {data['jenis_bank']}\n"
-                f"Nominal: {data['nominal']}",
+                f"Nominal: {data['nominal']}\n"
+                f"Asset: {data['asset']}",
                 GROUP_ID,
                 call.message.message_id,
                 parse_mode='Markdown'
@@ -313,19 +298,6 @@ def handle_injection_callback(call):
                 parse_mode='Markdown'
             )
             bot.answer_callback_query(call.id, "❌ Ditolak")
-        
-        # Cleanup: Hapus screenshot file dan data
-        if data.get('has_screenshot') and data.get('screenshot_path'):
-            try:
-                if os.path.exists(data['screenshot_path']):
-                    os.remove(data['screenshot_path'])
-                    print(f"🗑️ Deleted screenshot: {data['screenshot_path']}")
-            except Exception as e:
-                print(f"❌ Error deleting screenshot: {e}")
-        
-        # Hapus dari storage
-        if data.get('screenshot_msg_id') in screenshot_storage:
-            del screenshot_storage[data['screenshot_msg_id']]
         
         # Hapus dari pending
         if msg_id in pending_injections:
@@ -502,6 +474,10 @@ def handle_fee_message(message):
 ))
 def handle_reset_only_text(message):
     try:
+        # Skip jika ini permintaan suntik bank
+        if "Tolong suntik dari rek Tampungan KPS" in message.text:
+            return
+            
         text = message.text.strip()
         first_line = text.split('\n')[0]
         parts = first_line.split()
@@ -569,8 +545,7 @@ if __name__ == "__main__":
     print("🤖 X-SISTEM BOT - MULTI FUNCTIONS")
     print("📱 /reset [ID] [ASSET] - Reset password")
     print("📊 /report - Pilih jenis report")
-    print("💉 Suntik Bank - Kirim format suntik (dengan screenshot)")
-    print("📸 Screenshot disimpan untuk forward ke WhatsApp")
+    print("💉 Suntik Bank - Kirim format suntik + screenshot SEKALIGUS")
     print("🌐 Web server: http://0.0.0.0:${PORT}")
     print("⏰ Auto-pinger: Every 8 minutes")
     print("=" * 50)
