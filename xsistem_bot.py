@@ -109,16 +109,34 @@ def get_sheet():
         logger.error(f"❌ Google Sheets error: {e}")
         return None
 
+def find_empty_row(sheet):
+    """Mencari baris kosong pertama di kolom D (No Rek Bank)"""
+    try:
+        # Ambil semua data di kolom D
+        column_d = sheet.col_values(4)  # Kolom D adalah kolom ke-4 (index 4)
+        
+        # Cari baris pertama yang kosong (setelah header)
+        # Header biasanya di row 1-3, kita mulai dari row 4
+        for i in range(3, len(column_d) + 2):  # +2 karena indexing dimulai dari 1
+            if i >= len(column_d) or column_d[i] == "":
+                return i + 1  # +1 karena row indexing dimulai dari 1
+        
+        # Jika semua terisi, kembalikan row berikutnya
+        return len(column_d) + 1
+    except Exception as e:
+        logger.error(f"❌ Error finding empty row: {e}")
+        return 4  # Default ke row 4 jika error
+
 # ========== FUNGSI SUNIK BANK ==========
 def parse_injection_text(text):
     """Parsing SEMUA data dari format suntik bank"""
     patterns = {
-        'no_rek': r"No Rek Bank\s*:\s*(.+)",           # → D3
-        'jenis_bank': r"Jenis Bank\s*:\s*(.+)",       # → E3
-        'nama_bank': r"Nama Bank\s*:\s*(.+)",         # → F3
-        'nominal': r"Nominal Suntik\s*:\s*(.+)",      # → G3
-        'saldo_akhir': r"Saldo Akhir Bank\s*:\s*(.+)", # → H3
-        'asset': r"Asset\s*:\s*(.+)",                 # → (info saja)
+        'no_rek': r"No Rek Bank\s*:\s*(.+)",           # → D (kolom D)
+        'jenis_bank': r"Jenis Bank\s*:\s*(.+)",       # → E (kolom E) - TIDAK DIPAKAI
+        'nama_bank': r"Nama Bank\s*:\s*(.+)",         # → F (kolom F) - TIDAK DIPAKAI
+        'nominal': r"Nominal Suntik\s*:\s*(.+)",      # → G (kolom G)
+        'saldo_akhir': r"Saldo Akhir Bank\s*:\s*(.+)", # → H (kolom H)
+        'asset': r"Asset\s*:\s*(.+)",                 # → C (kolom C)
         'wallet': r"Wallet Addres\s*:\s*(.+)",        # → (info saja)
         'officer': r"OFFICER\s*:\s*(.+)"              # → Officer yang request
     }
@@ -131,37 +149,45 @@ def parse_injection_text(text):
     return extracted
 
 def update_spreadsheet_all_data(data, approver_name):
-    """Update SEMUA kolom di sheet X"""
+    """Update data ke baris kosong berikutnya di sheet X"""
     try:
         sheet = get_sheet()
         if not sheet:
             logger.error("❌ Sheet not found")
             return False
         
+        # Cari baris kosong berikutnya
+        target_row = find_empty_row(sheet)
+        logger.info(f"📊 Found empty row: {target_row}")
+        
+        # Format tanggal untuk kolom B (DATE)
+        current_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         
         # MAPPING DATA KE KOLOM:
-        # D3: No Rek Bank
-        # E3: Jenis Bank  
-        # F3: Nama Bank
-        # G3: Nominal Suntik
-        # H3: Saldo Akhir Bank
-        # K3: Approver (Admin)
+        # B: DATE (timestamps)
+        # C: ASET (Asset)
+        # D: NO REK BANK (No Rek Bank)
+        # G: NOMINAL SUNTIK (Nominal Suntik)
+        # H: SALDO AKHIR BANK (Saldo Akhir Bank)
+        # K: APPROVER (Admin)
+        # NOTE: Kolom E (JENIS BANK) dan F (NAMA REK BANK) TIDAK DIISI
         
         updates = [
-            ('D3', [[data['no_rek']]]),        # No Rek Bank
-            ('E3', [[data['jenis_bank']]]),    # Jenis Bank
-            ('F3', [[data['nama_bank']]]),     # Nama Bank
-            ('G3', [[data['nominal']]]),       # Nominal Suntik
-            ('H3', [[data['saldo_akhir']]]),   # Saldo Akhir Bank
-            ('K3', [[approver_name]])          # Approver
+            ('B', [[current_time]]),                 # Timestamp
+            ('C', [[data['asset']]]),                # Asset
+            ('D', [[data['no_rek']]]),               # No Rek Bank
+            ('G', [[data['nominal']]]),              # Nominal Suntik
+            ('H', [[data['saldo_akhir']]]),          # Saldo Akhir Bank
+            ('K', [[approver_name]])                 # Approver
         ]
         
-        logger.info("📊 Updating ALL columns in sheet X:")
-        for cell, value in updates:
+        logger.info("📊 Updating data to spreadsheet:")
+        for col, value in updates:
+            cell = f"{col}{target_row}"
             logger.info(f"   {cell} → {value[0][0]}")
             sheet.update(range_name=cell, values=value)
         
-        logger.info("✅ ALL data recorded to spreadsheet")
+        logger.info(f"✅ ALL data recorded to spreadsheet at row {target_row}")
         return True
         
     except Exception as e:
@@ -361,14 +387,15 @@ if __name__ == "__main__":
     print("🤖 X-SISTEM BOT - COMPLETE DATA RECORDING")
     print(f"📊 Spreadsheet ID: {SPREADSHEET_ID}")
     print(f"📄 Target sheet: {TARGET_SHEET_NAME}")
-    print("📝 Recording ALL data to columns:")
-    print("   B3: Timestamp")
-    print("   D3: No Rek Bank")
-    print("   E3: Jenis Bank")
-    print("   F3: Nama Bank")
-    print("   G3: Nominal Suntik")
-    print("   H3: Saldo Akhir Bank")
-    print("   K3: Approver (Admin)")
+    print("📝 Recording data to columns (new row for each injection):")
+    print("   B: DATE (timestamps)")
+    print("   C: ASET (Asset)")
+    print("   D: NO REK BANK (No Rek Bank)")
+    print("   G: NOMINAL SUNTIK (Nominal Suntik)")
+    print("   H: SALDO AKHIR BANK (Saldo Akhir Bank)")
+    print("   K: APPROVER (Admin)")
+    print("🚫 E: JENIS BANK (NOT recorded - left empty)")
+    print("🚫 F: NAMA REK BANK (NOT recorded - left empty)")
     print("👑 Admin: @Vingeance @bangjoshh")
     print("=" * 60)
     
@@ -382,4 +409,3 @@ if __name__ == "__main__":
     
     # Jalankan bot (main thread)
     run_bot()
-
