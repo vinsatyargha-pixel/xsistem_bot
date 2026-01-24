@@ -211,15 +211,21 @@ def handle_injection_callback(call):
             return
         
         if action == "approve":
-            # Update spreadsheet
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            approver_name = "Alvin" if admin == "Vingeance" else "Joshua"
-            
-            # Update B3 dengan timestamp
-            sheet.update('B3', [[current_time]])
-            
-            # Update K3 dengan nama approver
-            sheet.update('K3', [[approver_name]])
+    # ========== UPDATE SPREADSHEET ==========
+    try:
+        sheet = get_sheet()
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        approver_name = "Alvin" if admin == "Vingeance" else "Joshua"
+        
+        # Update B3 dengan timestamp
+        sheet.update('B3', [[current_time]])
+        # Update K3 dengan nama approver
+        sheet.update('K3', [[approver_name]])
+        
+        print(f"✅ Spreadsheet updated: B3={current_time}, K3={approver_name}")
+    except Exception as e:
+        print(f"❌ Spreadsheet error: {e}")
+    # ========== END UPDATE ==========
             
             # Edit pesan di grup
             bot.edit_message_text(
@@ -350,4 +356,5 @@ if __name__ == "__main__":
     
     # Jalankan bot (main thread)
     run_bot()
+
 
