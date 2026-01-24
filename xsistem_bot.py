@@ -93,18 +93,43 @@ def get_sheet():
         client = gspread.authorize(creds)
         spreadsheet = client.open_by_key(SPREADSHEET_ID)
         
-        # CARI SHEET DENGAN NAMA "X"
+        # TAMPILKAN SEMUA SHEET YANG ADA
+        logger.info("📋 Sheets available in spreadsheet:")
+        all_sheets = spreadsheet.worksheets()
+        for sheet in all_sheets:
+            logger.info(f"   - '{sheet.title}' (id: {sheet.id})")
+        
+        # CARI SHEET DENGAN NAMA "X" (case insensitive)
         target_sheet = None
-        for sheet in spreadsheet.worksheets():
-            if sheet.title.strip().upper() == TARGET_SHEET_NAME.upper():
+        for sheet in all_sheets:
+            # Cek berbagai kemungkinan penamaan
+            sheet_name = sheet.title.strip()
+            if sheet_name.upper() == TARGET_SHEET_NAME.upper():
                 target_sheet = sheet
+                logger.info(f"✅ Found target sheet: '{sheet_name}'")
                 break
         
         if not target_sheet:
-            target_sheet = spreadsheet.sheet1
+            logger.error(f"❌ Sheet '{TARGET_SHEET_NAME}' not found!")
+            logger.error("Available sheets:")
+            for sheet in all_sheets:
+                logger.error(f"   - '{sheet.title}'")
+            return None
+        
+        # TEST: Baca beberapa data untuk memastikan sheet benar
+        try:
+            sample_data = sheet.get_all_values()
+            logger.info(f"📊 Sheet has {len(sample_data)} rows of data")
+            if len(sample_data) > 0:
+                logger.info(f"📋 Header row: {sample_data[0]}")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not read sample data: {e}")
         
         return target_sheet
         
+    except gspread.exceptions.SpreadsheetNotFound:
+        logger.error(f"❌ Spreadsheet with ID '{SPREADSHEET_ID}' not found!")
+        return None
     except Exception as e:
         logger.error(f"❌ Google Sheets error: {e}")
         return None
@@ -115,14 +140,19 @@ def find_empty_row(sheet):
         # Ambil semua data di kolom D
         column_d = sheet.col_values(4)  # Kolom D adalah kolom ke-4 (index 4)
         
+        logger.info(f"🔍 Checking column D: found {len(column_d)} values")
+        
         # Cari baris pertama yang kosong (setelah header)
         # Header biasanya di row 1-3, kita mulai dari row 4
         for i in range(3, len(column_d) + 2):  # +2 karena indexing dimulai dari 1
             if i >= len(column_d) or column_d[i] == "":
+                logger.info(f"📌 Empty row found at index {i}, row {i+1}")
                 return i + 1  # +1 karena row indexing dimulai dari 1
         
         # Jika semua terisi, kembalikan row berikutnya
-        return len(column_d) + 1
+        next_row = len(column_d) + 1
+        logger.info(f"📌 All rows filled, next available row: {next_row}")
+        return next_row
     except Exception as e:
         logger.error(f"❌ Error finding empty row: {e}")
         return 4  # Default ke row 4 jika error
@@ -146,11 +176,13 @@ def parse_injection_text(text):
         match = re.search(pattern, text, re.IGNORECASE)
         extracted[key] = match.group(1).strip() if match else "N/A"
     
+    logger.info(f"📝 Parsed data: {extracted}")
     return extracted
 
 def update_spreadsheet_all_data(data, approver_name):
     """Update data ke baris kosong berikutnya di sheet X"""
     try:
+        logger.info("🔄 Starting spreadsheet update...")
         sheet = get_sheet()
         if not sheet:
             logger.error("❌ Sheet not found")
@@ -178,13 +210,28 @@ def update_spreadsheet_all_data(data, approver_name):
         for col, value in updates:
             cell = f"{col}{target_row}"
             logger.info(f"   {cell} → {value[0][0]}")
-            sheet.update(range_name=cell, values=value)
+            
+            try:
+                sheet.update(range_name=cell, values=value)
+                logger.info(f"   ✅ Updated {cell}")
+            except Exception as e:
+                logger.error(f"   ❌ Failed to update {cell}: {e}")
+                return False
         
         logger.info(f"✅ ALL data recorded to spreadsheet at row {target_row}")
+        
+        # Verifikasi: baca data yang baru ditulis
+        try:
+            verify_range = f"D{target_row}:K{target_row}"
+            verify_data = sheet.get(verify_range)
+            logger.info(f"✅ Verification - Row {target_row} data: {verify_data}")
+        except:
+            logger.warning("⚠️ Could not verify written data")
+        
         return True
         
     except Exception as e:
-        logger.error(f"❌ Failed to update spreadsheet: {e}")
+        logger.error(f"❌ Failed to update spreadsheet: {e}", exc_info=True)
         return False
 
 def send_admin_confirmation(data, original_message):
@@ -195,7 +242,8 @@ def send_admin_confirmation(data, original_message):
         f"JENIS BANK : {text_data['jenis_bank']}\n"
         f"📊 Saldo Akhir: {text_data['saldo_akhir']}\n"
         f"No Rek Bank : {text_data['no_rek']}\n"
-        f"📌 Asset: {text_data['asset']}\n\n"
+        f"📌 Asset: {text_data['asset']}\n"
+        f"👤 Officer: {data['officer']}\n\n"
         "Konfirmasi Admin:\n\n"
         "APPROVED atau DECLINE"
     )
@@ -227,12 +275,13 @@ def send_admin_confirmation(data, original_message):
         'admin_message_id': sent_msg.message_id
     }
     
-    logger.info(f"✅ Confirmation sent. Pending injections: {len(pending_injections)}")
+    logger.info(f"✅ Confirmation sent to group. Pending injections: {len(pending_injections)}")
 
 # ========== HANDLER SUNIK BANK ==========
 @bot.message_handler(content_types=['photo'])
 def handle_photo_with_caption(message):
     if message.caption and "Tolong suntik dari rek Tampungan KPS" in message.caption:
+        logger.info(f"📸 Photo with injection request from {message.from_user.username}")
         msg_text = message.caption
         parsed_data = parse_injection_text(msg_text)
         
@@ -258,6 +307,7 @@ def handle_injection_request(message):
     if any(cmd in message.text.lower() for cmd in ['/reset', '/repass', '/repas', 'report']):
         return
     
+    logger.info(f"📝 Text injection request from {message.from_user.username}")
     msg_text = message.text
     parsed_data = parse_injection_text(msg_text)
     
@@ -306,7 +356,12 @@ def handle_injection_callback(call):
             logger.info("🔄 Processing APPROVE...")
             
             # Tentukan approver
-            approver_name = "Alvin" if call.from_user.username == "Vingeance" else "Joshua"
+            if call.from_user.username == "Vingeance":
+                approver_name = "Alvin"
+            elif call.from_user.username == "bangjoshh":
+                approver_name = "Joshua"
+            else:
+                approver_name = call.from_user.username or "Admin"
             
             # UPDATE SEMUA DATA KE SPREADSHEET
             logger.info(f"📊 Updating ALL data to sheet '{TARGET_SHEET_NAME}'...")
