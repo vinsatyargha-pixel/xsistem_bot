@@ -19,7 +19,7 @@ bot = telebot.TeleBot(TOKEN)
 # Config untuk suntik bank
 ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]  # Alvin & Joshua
 GROUP_ID = -1003855148883  # ID grup X - INTERNAL WD
-SPREADSHEET_ID = "19wNCU9QLfnVHhTC3-MfJ8uYo8TGO1B8utxCcY0DETyTYaf0CqjvaXxog"
+SPREADSHEET_ID = "1_ix7oF2_KPXVnkQP9ScFa98zSBBf6-eLPC9Xzprm7bE"
 
 # ========== WEB SERVER FOR RENDER ==========
 web_app = Flask(__name__)
@@ -350,3 +350,4 @@ if __name__ == "__main__":
     
     # Jalankan bot (main thread)
     run_bot()
+
