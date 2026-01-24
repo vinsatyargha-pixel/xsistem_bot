@@ -58,11 +58,11 @@ def run_flask():
 def ping_self():
     """Ping sendiri agar tidak sleep di Render"""
     logger.info("⏰ Starting auto-pinger...")
-    time.sleep(30)  # Tunggu Flask start dulu
+    time.sleep(30)
     
     while True:
         try:
-            url = "https://cek-rekening-fi8f.onrender.com"  # Ganti dengan URL Render Anda
+            url = "https://cek-rekening-fi8f.onrender.com"
             response = requests.get(url + "/ping", timeout=10)
             
             now = time.strftime("%H:%M:%S")
@@ -74,7 +74,6 @@ def ping_self():
             now = time.strftime("%H:%M:%S")
             logger.error(f"❌ [{now}] Ping error: {e}")
         
-        # Tunggu 8 menit
         time.sleep(480)
 
 # ========== GOOGLE SHEETS UNTUK SHEET "X" ==========
@@ -83,65 +82,45 @@ def get_sheet():
     try:
         SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
         
-        logger.info(f"🔧 Connecting to Google Sheets...")
-        logger.info(f"   Spreadsheet ID: {SPREADSHEET_ID}")
-        logger.info(f"   Target sheet: '{TARGET_SHEET_NAME}'")
-        
         # Load credentials
         if os.getenv("GOOGLE_CREDENTIALS_JSON"):
-            logger.info("✅ Using credentials from env var")
             import json
             creds_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
             creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         else:
-            logger.info("✅ Using credentials from file")
             creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
         
-        # Authorize
         client = gspread.authorize(creds)
-        logger.info("✅ Google Sheets authorized")
-        
-        # Buka spreadsheet
         spreadsheet = client.open_by_key(SPREADSHEET_ID)
-        logger.info(f"✅ Spreadsheet opened: {spreadsheet.title}")
         
-        # LIST SEMUA SHEET YANG ADA (untuk debug)
-        all_sheets = spreadsheet.worksheets()
-        logger.info(f"📋 Available sheets in spreadsheet:")
-        for s in all_sheets:
-            logger.info(f"   - '{s.title}' (id: {s.id})")
-        
-        # CARI SHEET DENGAN NAMA "X" (case insensitive)
+        # CARI SHEET DENGAN NAMA "X"
         target_sheet = None
-        for sheet in all_sheets:
+        for sheet in spreadsheet.worksheets():
             if sheet.title.strip().upper() == TARGET_SHEET_NAME.upper():
                 target_sheet = sheet
-                logger.info(f"✅ Found target sheet: '{sheet.title}'")
                 break
         
         if not target_sheet:
-            logger.error(f"❌ Sheet '{TARGET_SHEET_NAME}' not found!")
-            logger.info("⚠️ Using first sheet as fallback")
             target_sheet = spreadsheet.sheet1
-        
-        # Test connection
-        test_cell = target_sheet.acell('A1').value
-        logger.info(f"📊 Test read A1: '{test_cell}'")
         
         return target_sheet
         
     except Exception as e:
-        logger.error(f"❌ Google Sheets error: {e}", exc_info=True)
+        logger.error(f"❌ Google Sheets error: {e}")
         return None
 
 # ========== FUNGSI SUNIK BANK ==========
 def parse_injection_text(text):
+    """Parsing SEMUA data dari format suntik bank"""
     patterns = {
-        'no_rek': r"No Rek Bank\s*:\s*(.+)",
-        'jenis_bank': r"Jenis Bank\s*:\s*(.+)",
-        'nominal': r"Nominal Suntik\s*:\s*(.+)",
-        'saldo_akhir': r"Saldo Akhir Bank\s*:\s*(.+)",
-        'asset': r"Asset\s*:\s*(.+)"
+        'no_rek': r"No Rek Bank\s*:\s*(.+)",           # → D3
+        'jenis_bank': r"Jenis Bank\s*:\s*(.+)",       # → E3
+        'nama_bank': r"Nama Bank\s*:\s*(.+)",         # → F3
+        'nominal': r"Nominal Suntik\s*:\s*(.+)",      # → G3
+        'saldo_akhir': r"Saldo Akhir Bank\s*:\s*(.+)", # → H3
+        'asset': r"Asset\s*:\s*(.+)",                 # → (info saja)
+        'wallet': r"Wallet Addres\s*:\s*(.+)",        # → (info saja)
+        'officer': r"OFFICER\s*:\s*(.+)"              # → Officer yang request
     }
     
     extracted = {}
@@ -150,6 +129,47 @@ def parse_injection_text(text):
         extracted[key] = match.group(1).strip() if match else "N/A"
     
     return extracted
+
+def update_spreadsheet_all_data(data, approver_name):
+    """Update SEMUA kolom di sheet X"""
+    try:
+        sheet = get_sheet()
+        if not sheet:
+            logger.error("❌ Sheet not found")
+            return False
+        
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # MAPPING DATA KE KOLOM:
+        # B3: Timestamp
+        # D3: No Rek Bank
+        # E3: Jenis Bank  
+        # F3: Nama Bank
+        # G3: Nominal Suntik
+        # H3: Saldo Akhir Bank
+        # K3: Approver (Admin)
+        
+        updates = [
+            ('B3', [[current_time]]),          # Timestamp
+            ('D3', [[data['no_rek']]]),        # No Rek Bank
+            ('E3', [[data['jenis_bank']]]),    # Jenis Bank
+            ('F3', [[data['nama_bank']]]),     # Nama Bank
+            ('G3', [[data['nominal']]]),       # Nominal Suntik
+            ('H3', [[data['saldo_akhir']]]),   # Saldo Akhir Bank
+            ('K3', [[approver_name]])          # Approver
+        ]
+        
+        logger.info("📊 Updating ALL columns in sheet X:")
+        for cell, value in updates:
+            logger.info(f"   {cell} → {value[0][0]}")
+            sheet.update(range_name=cell, values=value)
+        
+        logger.info("✅ ALL data recorded to spreadsheet")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to update spreadsheet: {e}")
+        return False
 
 def send_admin_confirmation(data, original_message):
     text_data = data['text_data']
@@ -200,6 +220,10 @@ def handle_photo_with_caption(message):
         msg_text = message.caption
         parsed_data = parse_injection_text(msg_text)
         
+        # Tambah officer dari pengirim
+        if parsed_data['officer'] == "N/A":
+            parsed_data['officer'] = message.from_user.username or message.from_user.first_name
+        
         injection_data = {
             'text_data': parsed_data,
             'user_id': message.from_user.id,
@@ -220,6 +244,10 @@ def handle_injection_request(message):
     
     msg_text = message.text
     parsed_data = parse_injection_text(msg_text)
+    
+    # Tambah officer dari pengirim
+    if parsed_data['officer'] == "N/A":
+        parsed_data['officer'] = message.from_user.username or message.from_user.first_name
     
     injection_data = {
         'text_data': parsed_data,
@@ -261,42 +289,28 @@ def handle_injection_callback(call):
         if action == "approve":
             logger.info("🔄 Processing APPROVE...")
             
-            # UPDATE SPREADSHEET SHEET "X"
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Tentukan approver
             approver_name = "Alvin" if call.from_user.username == "Vingeance" else "Joshua"
             
-            logger.info(f"📊 Updating sheet '{TARGET_SHEET_NAME}'...")
-            logger.info(f"   B3 → {current_time}")
-            logger.info(f"   K3 → {approver_name}")
+            # UPDATE SEMUA DATA KE SPREADSHEET
+            logger.info(f"📊 Updating ALL data to sheet '{TARGET_SHEET_NAME}'...")
+            success = update_spreadsheet_all_data(data, approver_name)
             
-            sheet = get_sheet()
-            if sheet:
-                try:
-                    # Update B3 di sheet "X"
-                    sheet.update(range_name='B3', values=[[current_time]])
-                    logger.info("✅ B3 updated in sheet 'X'")
-                    
-                    # Update K3 di sheet "X"
-                    sheet.update(range_name='K3', values=[[approver_name]])
-                    logger.info("✅ K3 updated in sheet 'X'")
-                    
-                    # Verifikasi
-                    b3_value = sheet.acell('B3').value
-                    k3_value = sheet.acell('K3').value
-                    logger.info(f"✅ Verification - B3: '{b3_value}', K3: '{k3_value}'")
-                    
-                except Exception as e:
-                    logger.error(f"❌ Failed to update sheet 'X': {e}", exc_info=True)
+            if success:
+                logger.info("✅ ALL data recorded to spreadsheet")
             else:
-                logger.error("❌ Failed to connect to sheet 'X'")
+                logger.error("❌ Failed to record data to spreadsheet")
             
             # Edit pesan di group
             new_text = (
                 f"✅ **DISETUJUI** oleh @{call.from_user.username or 'admin'}\n"
                 f"✍️ Approver: {approver_name}\n\n"
-                f"Bank: {data['jenis_bank']}\n"
+                f"Bank: {data['jenis_bank']} ({data['nama_bank']})\n"
+                f"Rekening: {data['no_rek']}\n"
                 f"Nominal: {data['nominal']}\n"
-                f"Asset: {data['asset']}"
+                f"Saldo: {data['saldo_akhir']}\n"
+                f"Asset: {data['asset']}\n"
+                f"Officer: {data['officer']}"
             )
             
             bot.edit_message_text(
@@ -306,7 +320,7 @@ def handle_injection_callback(call):
                 parse_mode='Markdown'
             )
             
-            bot.answer_callback_query(call.id, "✅ Disetujui & tercatat di spreadsheet (sheet X)")
+            bot.answer_callback_query(call.id, "✅ Disetujui & SEMUA data tercatat di sheet X")
             
         elif action == "decline":
             logger.info("🔄 Processing DECLINE...")
@@ -347,12 +361,18 @@ def run_bot():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🤖 X-SISTEM BOT - COMPLETE VERSION")
+    print("🤖 X-SISTEM BOT - COMPLETE DATA RECORDING")
     print(f"📊 Spreadsheet ID: {SPREADSHEET_ID}")
     print(f"📄 Target sheet: {TARGET_SHEET_NAME}")
+    print("📝 Recording ALL data to columns:")
+    print("   B3: Timestamp")
+    print("   D3: No Rek Bank")
+    print("   E3: Jenis Bank")
+    print("   F3: Nama Bank")
+    print("   G3: Nominal Suntik")
+    print("   H3: Saldo Akhir Bank")
+    print("   K3: Approver (Admin)")
     print("👑 Admin: @Vingeance @bangjoshh")
-    print("🌐 Flask server: http://0.0.0.0:$PORT")
-    print("⏰ Auto-pinger: Every 8 minutes")
     print("=" * 60)
     
     # Jalankan Flask di thread terpisah
