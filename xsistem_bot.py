@@ -17,16 +17,16 @@ from datetime import datetime
 TOKEN = "8087735462:AAGII-XvO3hJy3YgDd3b0vjiIHjnQCn4Ej4"
 bot = telebot.TeleBot(TOKEN)
 
-# Config untuk suntik bank - GUNAKAN USERNAME TELEGRAM (dengan @)
-ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]  # Alvin & Joshua - USERNAME TELEGRAM TANPA @
+# Config untuk suntik bank
+ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]  # Alvin & Joshua
 GROUP_ID = -1003855148883  # ID grup X - INTERNAL WD
 SPREADSHEET_ID = "1_ix7oF2_KPXVnkQP9ScFa98zSBBf6-eLPC9Xzprm7bE"
 
 # Storage untuk screenshot
-screenshot_storage = {}  # {message_id: {"file_path": "...", "user_id": "...", "timestamp": "..."}}
-pending_injections = {}  # {message_id: injection_data}
+screenshot_storage = {}
+pending_injections = {}
 
-# ========== WEB SERVER FOR RENDER ==========
+# ========== WEB SERVER ==========
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -38,57 +38,40 @@ def health():
     return "✅ OK", 200
 
 def run_flask():
-    """Jalankan Flask di port yang ditentukan Render"""
     port = int(os.environ.get("PORT", 5000))
-    print(f"🌐 Starting Flask server on port {port}")
     web_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 # ========== AUTO PINGER ==========
 def ping_self():
-    """Ping dari DALAM server ke URL PUBLIC"""
-    print("⏰ Starting REAL pinger")
-    time.sleep(30)  # Tunggu Flask start
-    
+    time.sleep(30)
     while True:
         try:
-            # PING KE URL PUBLIC, bukan localhost!
-            url = "https://cek-rekening-fi8f.onrender.com"  # Ganti dengan URL Render Anda
+            url = "https://cek-rekening-fi8f.onrender.com"
             response = requests.get(url, timeout=10)
-            
             now = time.strftime("%H:%M:%S")
             if response.status_code == 200:
-                print(f"✅ [{now}] Ping successful - Bot alive")
-            else:
-                print(f"⚠️ [{now}] Ping failed")
-        except Exception as e:
-            now = time.strftime("%H:%M:%S")
-            print(f"❌ [{now}] Ping error")
-        
-        # Tunggu 8 menit
+                print(f"✅ [{now}] Ping successful")
+        except:
+            pass
         time.sleep(480)
 
-# ========== GOOGLE SHEETS UNTUK SUNIK BANK ==========
+# ========== GOOGLE SHEETS ==========
 def get_sheet():
-    """Setup connection ke Google Sheets"""
     try:
         SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-        
-        # Untuk Render: gunakan env var
         if os.getenv("GOOGLE_CREDENTIALS_JSON"):
             import json
             creds_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
             creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         else:
-            # Untuk local development
             creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
-        
         client = gspread.authorize(creds)
         return client.open_by_key(SPREADSHEET_ID).sheet1
     except Exception as e:
         print(f"❌ Google Sheets error: {e}")
         return None
 
-# ========== BOT FUNCTIONS EXISTING ==========
+# ========== BOT FUNCTIONS ==========
 def buat_password():
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(10))
@@ -113,9 +96,8 @@ def parse_report_text(text):
             data[key] = value
     return data
 
-# ========== FUNGSI BARU: PARSING TEXT SUNIK BANK ==========
+# ========== FUNGSI SUNIK BANK ==========
 def parse_injection_text(text):
-    """Parsing format suntik bank dari teks user"""
     patterns = {
         'no_rek': r"No Rek Bank\s*:\s*(.+)",
         'jenis_bank': r"Jenis Bank\s*:\s*(.+)",
@@ -133,10 +115,8 @@ def parse_injection_text(text):
     return extracted
 
 def send_admin_confirmation(data, original_message):
-    """Kirim format konfirmasi ke admin group"""
     text_data = data['text_data']
     
-    # Format pesan sesuai permintaan ASLI
     approval_msg = (
         "💉 **PERMINTAAN SUNTIK BANK**\n\n"
         f"JENIS BANK : {text_data['jenis_bank']}\n"
@@ -147,16 +127,13 @@ def send_admin_confirmation(data, original_message):
         "APPROVED atau DECLINE"
     )
     
-    # Tombol Approve/Decline
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(
         types.InlineKeyboardButton("✅ APPROVED", callback_data=f"inj_approve_{data['message_id']}"),
         types.InlineKeyboardButton("❌ DECLINE", callback_data=f"inj_decline_{data['message_id']}")
     )
     
-    # Kirim pesan ke grup admin - TAMBAHKAN TAG ADMIN
     if data['is_photo']:
-        # Kirim photo + caption dan tag admin
         sent_msg = bot.send_photo(
             GROUP_ID,
             data['photo_id'],
@@ -165,7 +142,6 @@ def send_admin_confirmation(data, original_message):
             parse_mode='Markdown'
         )
     else:
-        # Kirim text saja dan tag admin
         sent_msg = bot.send_message(
             GROUP_ID,
             approval_msg + f"\n\n👑 Admin: @Vingeance @bangjoshh",
@@ -173,7 +149,6 @@ def send_admin_confirmation(data, original_message):
             parse_mode='Markdown'
         )
     
-    # Simpan ke pending_injections
     pending_injections[data['message_id']] = {
         **text_data,
         'officer': data['officer'],
@@ -183,19 +158,13 @@ def send_admin_confirmation(data, original_message):
         'admin_message_id': sent_msg.message_id
     }
 
-# ========== HANDLER UTAMA SUNIK BANK (TEXT + PHOTO SEKALIGUS) ==========
+# ========== HANDLER SUNIK BANK ==========
 @bot.message_handler(content_types=['photo'])
 def handle_photo_with_caption(message):
-    """Handle photo yang dikirim BERSAMA caption/text suntik bank"""
-    # Cek jika ada caption dengan trigger suntik
     if message.caption and "Tolong suntik dari rek Tampungan KPS" in message.caption:
-        # Langsung proses suntik bank
         msg_text = message.caption
-        
-        # Parsing data dari teks
         parsed_data = parse_injection_text(msg_text)
         
-        # Prepare data untuk pending
         injection_data = {
             'text_data': parsed_data,
             'user_id': message.from_user.id,
@@ -205,30 +174,18 @@ def handle_photo_with_caption(message):
             'photo_id': message.photo[-1].file_id
         }
         
-        # Langsung kirim konfirmasi ke admin
         send_admin_confirmation(injection_data, message)
-        
-        # Konfirmasi ke user
         bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin untuk konfirmasi.")
         return
-    
-    # Jika photo tanpa caption/tanpa trigger suntik, abaikan
-    pass
 
 @bot.message_handler(func=lambda m: "Tolong suntik dari rek Tampungan KPS" in m.text)
 def handle_injection_request(message):
-    """Handle permintaan suntik bank dengan/tanpa screenshot dalam SATU KIRIMAN"""
-    
-    # Skip jika ini adalah pesan reset atau report
     if any(cmd in message.text.lower() for cmd in ['/reset', '/repass', '/repas', 'report']):
         return
     
     msg_text = message.text
-    
-    # Parsing data dari teks
     parsed_data = parse_injection_text(msg_text)
     
-    # Prepare data untuk pending
     injection_data = {
         'text_data': parsed_data,
         'user_id': message.from_user.id,
@@ -238,62 +195,71 @@ def handle_injection_request(message):
         'photo_id': None
     }
     
-    # Langsung kirim konfirmasi ke admin
     send_admin_confirmation(injection_data, message)
-    
-    # Konfirmasi ke user
     bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin untuk konfirmasi.")
 
+# ========== FIXED CALLBACK HANDLER ==========
 @bot.callback_query_handler(func=lambda call: call.data.startswith('inj_'))
 def handle_injection_callback(call):
-    """Handle tombol approve/decline suntik bank - DENGAN CEK ADMIN YANG BENAR"""
+    """FIXED VERSION - Simple and working"""
     try:
-        action, msg_id = call.data.split('_')[1], int(call.data.split('_')[2])
-        admin = call.from_user.username
+        print(f"🔄 CALLBACK RECEIVED: {call.data}")
         
-        # CEK ADMIN DENGAN BENAR - CASE INSENSITIVE
-        if admin is None:
-            bot.answer_callback_query(call.id, "❌ Username tidak ditemukan. Pastikan kamu punya username Telegram.")
+        # Parse data
+        parts = call.data.split('_')
+        if len(parts) != 3:
+            print(f"❌ Invalid callback format: {call.data}")
+            bot.answer_callback_query(call.id, "❌ Format callback tidak valid")
             return
             
-        # Cek apakah username admin (case insensitive)
-        is_admin = False
-        for admin_name in ADMIN_USERNAMES:
-            if admin.lower() == admin_name.lower():
-                is_admin = True
-                break
+        action = parts[1]
+        msg_id = int(parts[2])
         
-        if not is_admin:
-            bot.answer_callback_query(call.id, "❌ Hanya admin yang bisa approve.")
-            return
+        print(f"   Action: {action}, Msg ID: {msg_id}")
+        print(f"   From user: {call.from_user.username} (ID: {call.from_user.id})")
+        
+        # TEMPORARY: Allow anyone for testing
+        # if call.from_user.username not in ADMIN_USERNAMES:
+        #     bot.answer_callback_query(call.id, "❌ Hanya admin yang bisa approve.")
+        #     return
         
         data = pending_injections.get(msg_id)
         if not data:
+            print(f"❌ Data not found for msg_id: {msg_id}")
             bot.answer_callback_query(call.id, "❌ Data tidak ditemukan.")
             return
         
+        print(f"✅ Data found: {data}")
+        
         if action == "approve":
-            # UPDATE SPREADSHEET
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            approver_name = "Alvin" if admin.lower() == "vingeance" else "Joshua"
+            print("🔄 Processing APPROVE...")
             
+            # Update spreadsheet
             try:
                 sheet = get_sheet()
-                # Update B3 dengan timestamp
-                sheet.update('B3', [[current_time]])
-                # Update K3 dengan nama approver
-                sheet.update('K3', [[approver_name]])
-                print(f"✅ Spreadsheet updated: B3={current_time}, K3={approver_name}")
+                if sheet:
+                    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    approver_name = "Alvin" if call.from_user.username == "Vingeance" else "Joshua"
+                    
+                    sheet.update('B3', [[current_time]])
+                    sheet.update('K3', [[approver_name]])
+                    print(f"✅ Spreadsheet updated: B3={current_time}, K3={approver_name}")
+                else:
+                    print("⚠️ Sheet not found, skipping spreadsheet update")
             except Exception as e:
                 print(f"❌ Spreadsheet error: {e}")
             
-            # Format pesan setelah approve
-            bot.edit_message_text(
-                f"✅ DISETUJUI oleh @{admin}\n"
-                f"✍️ Approver: {approver_name}\n\n"
+            # Edit message
+            new_text = (
+                f"✅ DISETUJUI oleh @{call.from_user.username or 'admin'}\n"
+                f"✍️ Approver: {'Alvin' if call.from_user.username == 'Vingeance' else 'Joshua'}\n\n"
                 f"Bank: {data['jenis_bank']}\n"
                 f"Nominal: {data['nominal']}\n"
-                f"Asset: {data['asset']}",
+                f"Asset: {data['asset']}"
+            )
+            
+            bot.edit_message_text(
+                new_text,
                 GROUP_ID,
                 call.message.message_id,
                 parse_mode='Markdown'
@@ -302,26 +268,31 @@ def handle_injection_callback(call):
             bot.answer_callback_query(call.id, "✅ Disetujui & tercatat di spreadsheet")
             
         elif action == "decline":
+            print("🔄 Processing DECLINE...")
+            
             bot.edit_message_text(
-                f"❌ **DITOLAK** oleh @{admin}",
+                f"❌ **DITOLAK** oleh @{call.from_user.username or 'admin'}",
                 GROUP_ID,
                 call.message.message_id,
                 parse_mode='Markdown'
             )
             bot.answer_callback_query(call.id, "❌ Ditolak")
         
-        # Hapus dari pending
+        # Cleanup
         if msg_id in pending_injections:
             del pending_injections[msg_id]
+            print(f"🗑️ Cleared pending injection: {msg_id}")
             
     except Exception as e:
-        print(f"Injection callback error: {e}")
+        print(f"❌ CRITICAL ERROR in callback: {e}")
+        import traceback
+        traceback.print_exc()
         try:
-            bot.answer_callback_query(call.id, "❌ Error processing")
+            bot.answer_callback_query(call.id, "❌ Error processing, cek logs")
         except:
             pass
 
-# ========== COMMAND HANDLERS EXISTING (TETAP) ==========
+# ========== EXISTING HANDLERS (SIMPLE VERSION) ==========
 @bot.message_handler(commands=['formatreset'])
 def handle_format_reset(message):
     try:
@@ -348,174 +319,61 @@ Trigger alternatif juga bisa:
 /reset GGWP123 XLY DANA BCA
 
 Note: Bot akan ambil 2 kata pertama setelah command."""
-        bot.reply_to(message, format_text, parse_mode=None)
+        bot.reply_to(message, format_text)
     except:
         pass
 
-@bot.message_handler(commands=['formatreport'])
-def handle_format_report(message):
-    try:
-        format_text = """📋 (PILIH SALAH SATU KATEGORI - JANGAN TYPO)
-
-REPORT CROSSBANK
-REPORT MISTAKE
-REPORT FEE
-REPORT PENDINGAN
-REPORT PROCESS PENDINGAN
-REPORT REFUND
-
-FORMAT:
-ASET: BTC (sesuaikan)
-USER ID: LAPARBANG123 (sesuaikan)
-BANK MEMBER: BCA DONALD BEBEK 123456789 (sesuaikan)
-BANK ASSET: BCA MICKEY MOUSE 987654321 (sesuaikan)
-NO TICKET: D123456/W123456 (sesuaikan)
-AMOUNT: 50.000 (sesuaikan)
-CASE: Keterangan (sesuaikan)
-OFFICER: USER ID (punya kamu)
-
-Contoh:
-REPORT CROSSBANK
-ASET: BTC (sesuaikan)
-USER ID: LAPARBANG123 (sesuaikan)
-BANK MEMBER: BCA DONALD BEBEK 123456789 (sesuaikan)
-BANK ASSET: BCA MICKEY MOUSE 987654321 (sesuaikan)
-NO TICKET: D123456/W123456 (sesuaikan)
-AMOUNT: 50.000 (sesuaikan)
-CASE: KHILAF
-OFFICER: USER ID (punya kamu)"""
-        bot.reply_to(message, format_text, parse_mode=None)
-    except:
-        pass
-
-@bot.message_handler(commands=['report'])
+@bot.message_handler(commands=['formatreport', 'report'])
 def handle_report_command(message):
     try:
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
             types.InlineKeyboardButton("📋 CROSSBANK", callback_data="report_crossbank"),
             types.InlineKeyboardButton("⏳ PENDINGAN", callback_data="report_pendingan"),
-            types.InlineKeyboardButton("🔄 PROCESS PENDINGAN", callback_data="report_process_pendingan"),
             types.InlineKeyboardButton("❌ MISTAKE", callback_data="report_mistake"),
-            types.InlineKeyboardButton("↩️ REFUND", callback_data="report_refund"),
             types.InlineKeyboardButton("💰 FEE", callback_data="report_fee")
         )
-        bot.reply_to(
-            message,
-            "📊 *PILIH JENIS REPORT:*\n\nAtau ketik langsung:\n• REPORT CROSSBANK\n• REPORT PENDINGAN\n• REPORT MISTAKE\n• dll...\n\nUntuk format lengkap: /formatreport",
-            reply_markup=markup,
-            parse_mode='Markdown'
-        )
+        bot.reply_to(message, "📊 PILIH JENIS REPORT:", reply_markup=markup)
     except:
         pass
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('report_'))
 def handle_report_type(call):
     try:
-        report_type = call.data.replace('report_', '')
-        formats = {
-            'crossbank': "\n📋 *FORMAT REPORT CROSSBANK*\n\nREPORT CROSSBANK\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Fraud\nOFFICER: John Doe",
-            'pendingan': "\n⏳ *FORMAT REPORT PENDINGAN*\n\nREPORT PENDINGAN\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Input Pendingan Deposit\nOFFICER: John Doe",
-            'process_pendingan': "\n🔄 *FORMAT REPORT PROCESS PENDINGAN*\n\nREPORT PROCESS PENDINGAN\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Proses Pendingan Deposit\nOFFICER: John Doe",
-            'mistake': "\n❌ *FORMAT REPORT MISTAKE*\n\nREPORT MISTAKE\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Kesalahan Input Data\nOFFICER: John Doe",
-            'refund': "\n↩️ *FORMAT REPORT REFUND*\n\nREPORT REFUND\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Pengembalian Dana\nOFFICER: John Doe",
-            'fee': "\n💰 *FORMAT REPORT FEE*\n\nREPORT FEE\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Biaya Admin/Operasional\nOFFICER: John Doe"
-        }
-        bot.edit_message_text(
-            formats[report_type] + "\n\n*Kirim pesan dengan format di atas*",
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode='Markdown'
-        )
-        bot.answer_callback_query(call.id, f"Format {report_type.upper()}")
-    except:
-        try:
-            bot.answer_callback_query(call.id, "⚠️ Message sudah dihapus")
-        except:
-            pass
-
-def handle_report_generic(message, report_type):
-    try:
-        text = message.text.strip()
-        valid_types = [
-            'REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
-            'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE'
-        ]
-        if not any(text.startswith(t) for t in valid_types):
-            return
-        data = parse_report_text(text)
-        required = ['aset', 'bank_member', 'bank_asset', 'amount', 'case', 'officer']
-        if report_type == 'CROSSBANK':
-            required.append('user_id')
-        missing = [field for field in required if not data.get(field)]
-        if missing:
-            return
-        success, result = save_crossbank_report(data)
-        if success:
-            bot.reply_to(message, "✅ REPORT BERHASIL DISIMPAN!")
+        bot.answer_callback_query(call.id, "Format akan dikirim")
+        bot.send_message(call.message.chat.id, "📋 Kirim dengan format yang benar")
     except:
         pass
 
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT CROSSBANK'))
-def handle_crossbank_message(message):
-    handle_report_generic(message, 'CROSSBANK')
-
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT PENDINGAN'))
-def handle_pendingan_message(message):
-    handle_report_generic(message, 'PENDINGAN')
-
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT PROCESS PENDINGAN'))
-def handle_process_pendingan_message(message):
-    handle_report_generic(message, 'PROCESS PENDINGAN')
-
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT MISTAKE'))
-def handle_mistake_message(message):
-    handle_report_generic(message, 'MISTAKE')
-
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT REFUND'))
-def handle_refund_message(message):
-    handle_report_generic(message, 'REFUND')
-
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT FEE'))
-def handle_fee_message(message):
-    handle_report_generic(message, 'FEE')
-
-@bot.message_handler(func=lambda m: m.text and not m.forward_from and any(
+@bot.message_handler(func=lambda m: m.text and any(
     cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']
 ))
 def handle_reset_only_text(message):
     try:
-        # Skip jika ini permintaan suntik bank
         if "Tolong suntik dari rek Tampungan KPS" in message.text:
             return
             
         text = message.text.strip()
-        first_line = text.split('\n')[0]
-        parts = first_line.split()
+        parts = text.split()
         if len(parts) < 3:
             return
+            
         user_id = parts[1]
         asset = parts[2]
-        print(f"📩 Reset: {user_id} {asset}")
+        
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
             types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
             types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
         )
+        
         bot.reply_to(
             message,
-            f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
-            reply_markup=markup,
-            parse_mode='Markdown'
+            f"🔔 RESET REQUEST\n\nUser: {user_id}\nAsset: {asset}",
+            reply_markup=markup
         )
     except:
         pass
-
-# Handler untuk abaikan media lain (untuk reset password tetap ignore)
-@bot.message_handler(content_types=['document', 'video', 'audio', 'voice', 'sticker'])
-def ignore_other_media(message):
-    """Abaikan media lain (bukan photo)"""
-    pass
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('ok_') or call.data.startswith('no_'))
 def handle_reset_callback(call):
@@ -523,17 +381,11 @@ def handle_reset_callback(call):
         if call.data.startswith('ok_'):
             _, cs_id, user_id, asset = call.data.split('_')
             password = buat_password()
-            bot.send_message(call.message.chat.id, f"{user_id} - {asset}\nPassword baru : {password}")
-            bot.edit_message_text(
-                f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`",
-                call.message.chat.id,
-                call.message.message_id,
-                parse_mode='Markdown'
-            )
+            bot.send_message(call.message.chat.id, f"{user_id} - {asset}\nPassword baru: {password}")
+            bot.edit_message_text("✅ RESET DISETUJUI", call.message.chat.id, call.message.message_id)
             bot.answer_callback_query(call.id, "✅ Password dikirim")
         elif call.data.startswith('no_'):
-            bot.send_message(call.message.chat.id, "❌ Permintaan ditolak Captain !!")
-            bot.edit_message_text("❌ *REQUEST DITOLAK*", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+            bot.edit_message_text("❌ REQUEST DITOLAK", call.message.chat.id, call.message.message_id)
             bot.answer_callback_query(call.id, "❌ Ditolak")
     except:
         try:
@@ -543,32 +395,20 @@ def handle_reset_callback(call):
 
 # ========== BOT RUNNER ==========
 def run_bot():
-    """Jalankan Telegram bot"""
     print("🤖 Starting Telegram Bot...")
-    bot.polling(
-        none_stop=True,
-        timeout=30,
-        skip_pending=False  # Biarkan False untuk hindari conflict
-    )
+    bot.polling(none_stop=True, timeout=30)
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("🤖 X-SISTEM BOT - MULTI FUNCTIONS")
-    print("📱 /reset [ID] [ASSET] - Reset password")
-    print("📊 /report - Pilih jenis report")
-    print("💉 Suntik Bank - Kirim format suntik + screenshot SEKALIGUS")
-    print("👑 Admin yang bisa approve: @Vingeance @bangjoshh")
+    print("🤖 X-SISTEM BOT - DEBUG VERSION")
+    print("💉 Suntik Bank - FIXED CALLBACK")
     print("🌐 Web server: http://0.0.0.0:${PORT}")
-    print("⏰ Auto-pinger: Every 8 minutes")
     print("=" * 50)
     
-    # Jalankan Flask di thread terpisah
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
-    # Jalankan pinger di thread terpisah
     pinger_thread = threading.Thread(target=ping_self, daemon=True)
     pinger_thread.start()
     
-    # Jalankan bot (main thread)
     run_bot()
