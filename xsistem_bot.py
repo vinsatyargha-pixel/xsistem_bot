@@ -28,9 +28,54 @@ bot = telebot.TeleBot(TOKEN)
 ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]
 GROUP_ID = -1003855148883
 SPREADSHEET_ID = "1_ix7oF2_KPXVnkQP9ScFa98zSBBf6-eLPC9Xzprm7bE"
-TARGET_SHEET_NAME = "X"  # <-- NAMA SHEET YANG BENAR
+TARGET_SHEET_NAME = "X"
 
 pending_injections = {}
+
+# ========== FLASK SERVER UNTUK RENDER ==========
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return "🤖 X-SISTEM BOT IS RUNNING", 200
+
+@web_app.route('/health')
+def health():
+    return "✅ OK", 200
+
+@web_app.route('/ping')
+def ping():
+    return "🏓 PONG", 200
+
+def run_flask():
+    """Jalankan Flask server di port Render"""
+    port = int(os.environ.get("PORT", 5000))
+    logger.info(f"🌐 Starting Flask server on port {port}")
+    logger.info(f"🌐 Web server URL: http://0.0.0.0:{port}")
+    web_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+# ========== AUTO PINGER UNTUK RENDER ==========
+def ping_self():
+    """Ping sendiri agar tidak sleep di Render"""
+    logger.info("⏰ Starting auto-pinger...")
+    time.sleep(30)  # Tunggu Flask start dulu
+    
+    while True:
+        try:
+            url = "https://cek-rekening-fi8f.onrender.com"  # Ganti dengan URL Render Anda
+            response = requests.get(url + "/ping", timeout=10)
+            
+            now = time.strftime("%H:%M:%S")
+            if response.status_code == 200:
+                logger.info(f"✅ [{now}] Ping successful - Bot alive")
+            else:
+                logger.warning(f"⚠️ [{now}] Ping failed: {response.status_code}")
+        except Exception as e:
+            now = time.strftime("%H:%M:%S")
+            logger.error(f"❌ [{now}] Ping error: {e}")
+        
+        # Tunggu 8 menit
+        time.sleep(480)
 
 # ========== GOOGLE SHEETS UNTUK SHEET "X" ==========
 def get_sheet():
@@ -301,11 +346,22 @@ def run_bot():
     bot.polling(none_stop=True, timeout=30)
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("🤖 X-SISTEM BOT - TARGETING SHEET 'X'")
+    print("=" * 60)
+    print("🤖 X-SISTEM BOT - COMPLETE VERSION")
     print(f"📊 Spreadsheet ID: {SPREADSHEET_ID}")
     print(f"📄 Target sheet: {TARGET_SHEET_NAME}")
     print("👑 Admin: @Vingeance @bangjoshh")
-    print("=" * 50)
+    print("🌐 Flask server: http://0.0.0.0:$PORT")
+    print("⏰ Auto-pinger: Every 8 minutes")
+    print("=" * 60)
     
+    # Jalankan Flask di thread terpisah
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    # Jalankan pinger di thread terpisah
+    pinger_thread = threading.Thread(target=ping_self, daemon=True)
+    pinger_thread.start()
+    
+    # Jalankan bot (main thread)
     run_bot()
