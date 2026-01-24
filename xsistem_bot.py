@@ -6,6 +6,7 @@ import time
 import requests
 import os
 import threading
+import tempfile
 from flask import Flask
 import re
 import gspread
@@ -17,9 +18,13 @@ TOKEN = "8087735462:AAGII-XvO3hJy3YgDd3b0vjiIHjnQCn4Ej4"
 bot = telebot.TeleBot(TOKEN)
 
 # Config untuk suntik bank
-ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]  # Alvin & Joshua
+ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]  # Alvin & Joshua - sesuaikan jika berbeda
 GROUP_ID = -1003855148883  # ID grup X - INTERNAL WD
 SPREADSHEET_ID = "1_ix7oF2_KPXVnkQP9ScFa98zSBBf6-eLPC9Xzprm7bE"
+
+# Storage untuk screenshot
+screenshot_storage = {}  # {message_id: {"file_path": "...", "user_id": "...", "timestamp": "..."}}
+pending_injections = {}  # {message_id: injection_data}
 
 # ========== WEB SERVER FOR RENDER ==========
 web_app = Flask(__name__)
@@ -108,12 +113,69 @@ def parse_report_text(text):
             data[key] = value
     return data
 
-# ========== FITUR BARU: SUNIK BANK ==========
-pending_injections = {}  # Simpan data sementara
+# ========== HANDLER UNTUK SCREENSHOT SUNIK BANK ==========
+@bot.message_handler(content_types=['photo'])
+def handle_screenshot_photo(message):
+    """Handle screenshot khusus untuk suntik bank"""
+    user_id = message.from_user.id
+    officer = message.from_user.username or message.from_user.first_name
+    
+    try:
+        # Download photo
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        
+        # Simpan sementara
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
+        temp_file.write(downloaded_file)
+        temp_file.close()
+        
+        # Simpan di storage
+        screenshot_storage[message.message_id] = {
+            'file_path': temp_file.name,
+            'user_id': user_id,
+            'timestamp': datetime.now(),
+            'officer': officer
+        }
+        
+        # Cleanup old screenshots (lebih dari 10 menit)
+        current_time = datetime.now()
+        for msg_id in list(screenshot_storage.keys()):
+            storage_time = screenshot_storage[msg_id]['timestamp']
+            if (current_time - storage_time).seconds > 600:  # 10 menit
+                try:
+                    os.remove(screenshot_storage[msg_id]['file_path'])
+                    del screenshot_storage[msg_id]
+                except:
+                    pass
+        
+        print(f"📸 Screenshot saved for {officer} (user_id: {user_id})")
+        
+        # Reply instruksi
+        bot.reply_to(
+            message,
+            "📸 **Screenshot saldo diterima!**\n"
+            "✅ Sekarang kirim **format teks suntik bank** dalam **5 menit**.\n\n"
+            "📋 **Format yang diminta:**\n"
+            "Tolong suntik dari rek Tampungan KPS ke rek berikut\n\n"
+            "Wallet Addres : \n"
+            "No Rek Bank : \n"
+            "Jenis Bank : \n"
+            "Nama Bank : \n"
+            "Nominal Suntik : \n"
+            "Saldo Akhir Bank : \n"
+            "Asset : "
+        )
+        
+    except Exception as e:
+        print(f"❌ Error processing screenshot: {e}")
+        bot.reply_to(message, "❌ Gagal menyimpan screenshot. Coba kirim ulang gambar.")
 
+# ========== FITUR BARU: SUNIK BANK DENGAN SCREENSHOT ==========
 @bot.message_handler(func=lambda m: "Tolong suntik dari rek Tampungan KPS" in m.text)
 def handle_injection_request(message):
-    """Handle permintaan suntik bank"""
+    """Handle permintaan suntik bank dengan/tanpa screenshot"""
+    user_id = message.from_user.id
     officer = message.from_user.username or message.from_user.first_name
     msg_text = message.text
     
@@ -127,6 +189,18 @@ def handle_injection_request(message):
     
     wallet = wallet_match.group(1).strip()
     asset = asset_match.group(1).strip()
+    
+    # Cek apakah ada screenshot dari user ini (5 menit terakhir)
+    screenshot_data = None
+    screenshot_msg_id = None
+    
+    for msg_id, data in list(screenshot_storage.items()):
+        if data['user_id'] == user_id:
+            time_diff = (datetime.now() - data['timestamp']).seconds
+            if time_diff < 300:  # 5 menit
+                screenshot_data = data
+                screenshot_msg_id = msg_id
+                break
     
     # Ambil data dari spreadsheet
     sheet = get_sheet()
@@ -155,12 +229,18 @@ def handle_injection_request(message):
         'jenis_bank': jenis_bank,
         'nominal': nominal,
         'saldo_akhir': saldo_akhir,
-        'original_msg_id': message.message_id
+        'original_msg_id': message.message_id,
+        'has_screenshot': screenshot_data is not None,
+        'screenshot_path': screenshot_data['file_path'] if screenshot_data else None,
+        'screenshot_msg_id': screenshot_msg_id
     }
     
-    # Buat pesan approval
+    # Buat pesan approval (dengan/tanpa screenshot info)
+    screenshot_note = "📸 **+ SCREENSHOT TERLAMPIR**" if screenshot_data else ""
+    
     approval_msg = (
         "💉 **PERMINTAAN SUNTIK BANK**\n"
+        f"{screenshot_note}\n"
         f"👤 Officer: {officer}\n"
         f"🏦 Bank: {nama_bank} ({jenis_bank})\n"
         f"🔢 Rekening: {rek}\n"
@@ -186,7 +266,11 @@ def handle_injection_request(message):
         parse_mode='Markdown'
     )
     
-    bot.reply_to(message, "✅ Permintaan telah dikirim ke admin.")
+    reply_text = "✅ Permintaan telah dikirim ke admin."
+    if screenshot_data:
+        reply_text += "\n📸 Screenshot telah dilampirkan."
+    
+    bot.reply_to(message, reply_text)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('inj_'))
 def handle_injection_callback(call):
@@ -211,29 +295,50 @@ def handle_injection_callback(call):
             return
         
         if action == "approve":
-    # ========== UPDATE SPREADSHEET ==========
-    try:
-        sheet = get_sheet()
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        approver_name = "Alvin" if admin == "Vingeance" else "Joshua"
-        
-        # Update B3 dengan timestamp
-        sheet.update('B3', [[current_time]])
-        # Update K3 dengan nama approver
-        sheet.update('K3', [[approver_name]])
-        
-        print(f"✅ Spreadsheet updated: B3={current_time}, K3={approver_name}")
-    except Exception as e:
-        print(f"❌ Spreadsheet error: {e}")
-    # ========== END UPDATE ==========
+            # ========== UPDATE SPREADSHEET ==========
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            approver_name = "Alvin" if admin == "Vingeance" else "Joshua"
             
-            # Edit pesan di grup
+            try:
+                # Update B3 dengan timestamp
+                sheet.update('B3', [[current_time]])
+                # Update K3 dengan nama approver
+                sheet.update('K3', [[approver_name]])
+                print(f"✅ Spreadsheet updated: B3={current_time}, K3={approver_name}")
+            except Exception as e:
+                print(f"❌ Spreadsheet error: {e}")
+            # ========== END UPDATE ==========
+            
+            # Jika ada screenshot, buat instruksi forward ke WhatsApp
+            forward_instruction = ""
+            if data.get('has_screenshot') and data.get('screenshot_path'):
+                forward_instruction = (
+                    "\n\n📤 **UNTUK FORWARD KE WHATSAPP:**\n"
+                    "1. **Download screenshot** dari Telegram (yang sudah dikirim sebelumnya)\n"
+                    "2. **Copy teks di bawah ini**\n"
+                    "3. **Paste ke grup WhatsApp** beserta screenshot\n\n"
+                    "--- TEKS UNTUK WHATSAPP ---\n"
+                    f"💉 **SUNTIK BANK - DISETUJUI**\n"
+                    f"🕐 {current_time}\n"
+                    f"👤 Officer: {data['officer']}\n"
+                    f"🏦 Bank: {data['nama_bank']} ({data['jenis_bank']})\n"
+                    f"🔢 Rek: {data['rek']}\n"
+                    f"💰 Nominal: {data['nominal']}\n"
+                    f"📊 Saldo Akhir: {data['saldo_akhir']}\n"
+                    f"👛 Wallet: {data['wallet']}\n"
+                    f"📌 Asset: {data['asset']}\n"
+                    f"✅ Disetujui oleh: {approver_name}\n"
+                    "--- AKHIR TEKS ---"
+                )
+            
+            # Edit pesan dengan instruksi forward
             bot.edit_message_text(
                 f"✅ **DISETUJUI** oleh @{admin}\n"
                 f"⏰ Timestamp: {current_time}\n"
                 f"✍️ Approver: {approver_name}\n\n"
                 f"Bank: {data['nama_bank']}\n"
-                f"Nominal: {data['nominal']}",
+                f"Nominal: {data['nominal']}"
+                f"{forward_instruction}",
                 GROUP_ID,
                 call.message.message_id,
                 parse_mode='Markdown'
@@ -250,6 +355,19 @@ def handle_injection_callback(call):
             )
             bot.answer_callback_query(call.id, "❌ Ditolak")
         
+        # Cleanup: Hapus screenshot file dan data
+        if data.get('has_screenshot') and data.get('screenshot_path'):
+            try:
+                if os.path.exists(data['screenshot_path']):
+                    os.remove(data['screenshot_path'])
+                    print(f"🗑️ Deleted screenshot: {data['screenshot_path']}")
+            except Exception as e:
+                print(f"❌ Error deleting screenshot: {e}")
+        
+        # Hapus dari storage
+        if data.get('screenshot_msg_id') in screenshot_storage:
+            del screenshot_storage[data['screenshot_msg_id']]
+        
         # Hapus dari pending
         if msg_id in pending_injections:
             del pending_injections[msg_id]
@@ -264,27 +382,137 @@ def handle_injection_callback(call):
 # ========== COMMAND HANDLERS EXISTING (TETAP) ==========
 @bot.message_handler(commands=['formatreset'])
 def handle_format_reset(message):
-    # ... (sama seperti sebelumnya)
-    pass
+    try:
+        format_text = """📋 CONTOH FORMAT YANG BENAR:
+
+/repas ID ASSET
+BANK MEMBER
+BANK TUJUAN
+WALLET :
+OFFICER :
+
+───────────────
+Contoh lengkap:
+/repas GGWP123 XLY
+BRI TRALALA 123456789101112
+BCA BLABLABLA 9876543210
+WALLET : 
+OFFICER : kamu
+
+───────────────
+Trigger alternatif juga bisa:
+/reset GGWP123 XLY
+/repass GGWP123-XLY
+/reset GGWP123 XLY DANA BCA
+
+Note: Bot akan ambil 2 kata pertama setelah command."""
+        bot.reply_to(message, format_text, parse_mode=None)
+    except:
+        pass
 
 @bot.message_handler(commands=['formatreport'])
 def handle_format_report(message):
-    # ... (sama seperti sebelumnya)
-    pass
+    try:
+        format_text = """📋 (PILIH SALAH SATU KATEGORI - JANGAN TYPO)
+
+REPORT CROSSBANK
+REPORT MISTAKE
+REPORT FEE
+REPORT PENDINGAN
+REPORT PROCESS PENDINGAN
+REPORT REFUND
+
+FORMAT:
+ASET: BTC (sesuaikan)
+USER ID: LAPARBANG123 (sesuaikan)
+BANK MEMBER: BCA DONALD BEBEK 123456789 (sesuaikan)
+BANK ASSET: BCA MICKEY MOUSE 987654321 (sesuaikan)
+NO TICKET: D123456/W123456 (sesuaikan)
+AMOUNT: 50.000 (sesuaikan)
+CASE: Keterangan (sesuaikan)
+OFFICER: USER ID (punya kamu)
+
+Contoh:
+REPORT CROSSBANK
+ASET: BTC (sesuaikan)
+USER ID: LAPARBANG123 (sesuaikan)
+BANK MEMBER: BCA DONALD BEBEK 123456789 (sesuaikan)
+BANK ASSET: BCA MICKEY MOUSE 987654321 (sesuaikan)
+NO TICKET: D123456/W123456 (sesuaikan)
+AMOUNT: 50.000 (sesuaikan)
+CASE: KHILAF
+OFFICER: USER ID (punya kamu)"""
+        bot.reply_to(message, format_text, parse_mode=None)
+    except:
+        pass
 
 @bot.message_handler(commands=['report'])
 def handle_report_command(message):
-    # ... (sama seperti sebelumnya)
-    pass
+    try:
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("📋 CROSSBANK", callback_data="report_crossbank"),
+            types.InlineKeyboardButton("⏳ PENDINGAN", callback_data="report_pendingan"),
+            types.InlineKeyboardButton("🔄 PROCESS PENDINGAN", callback_data="report_process_pendingan"),
+            types.InlineKeyboardButton("❌ MISTAKE", callback_data="report_mistake"),
+            types.InlineKeyboardButton("↩️ REFUND", callback_data="report_refund"),
+            types.InlineKeyboardButton("💰 FEE", callback_data="report_fee")
+        )
+        bot.reply_to(
+            message,
+            "📊 *PILIH JENIS REPORT:*\n\nAtau ketik langsung:\n• REPORT CROSSBANK\n• REPORT PENDINGAN\n• REPORT MISTAKE\n• dll...\n\nUntuk format lengkap: /formatreport",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+    except:
+        pass
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('report_'))
 def handle_report_type(call):
-    # ... (sama seperti sebelumnya)
-    pass
+    try:
+        report_type = call.data.replace('report_', '')
+        formats = {
+            'crossbank': "\n📋 *FORMAT REPORT CROSSBANK*\n\nREPORT CROSSBANK\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Fraud\nOFFICER: John Doe",
+            'pendingan': "\n⏳ *FORMAT REPORT PENDINGAN*\n\nREPORT PENDINGAN\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Input Pendingan Deposit\nOFFICER: John Doe",
+            'process_pendingan': "\n🔄 *FORMAT REPORT PROCESS PENDINGAN*\n\nREPORT PROCESS PENDINGAN\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Proses Pendingan Deposit\nOFFICER: John Doe",
+            'mistake': "\n❌ *FORMAT REPORT MISTAKE*\n\nREPORT MISTAKE\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Kesalahan Input Data\nOFFICER: John Doe",
+            'refund': "\n↩️ *FORMAT REPORT REFUND*\n\nREPORT REFUND\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Pengembalian Dana\nOFFICER: John Doe",
+            'fee': "\n💰 *FORMAT REPORT FEE*\n\nREPORT FEE\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Biaya Admin/Operasional\nOFFICER: John Doe"
+        }
+        bot.edit_message_text(
+            formats[report_type] + "\n\n*Kirim pesan dengan format di atas*",
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode='Markdown'
+        )
+        bot.answer_callback_query(call.id, f"Format {report_type.upper()}")
+    except:
+        try:
+            bot.answer_callback_query(call.id, "⚠️ Message sudah dihapus")
+        except:
+            pass
 
 def handle_report_generic(message, report_type):
-    # ... (sama seperti sebelumnya)
-    pass
+    try:
+        text = message.text.strip()
+        valid_types = [
+            'REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
+            'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE'
+        ]
+        if not any(text.startswith(t) for t in valid_types):
+            return
+        data = parse_report_text(text)
+        required = ['aset', 'bank_member', 'bank_asset', 'amount', 'case', 'officer']
+        if report_type == 'CROSSBANK':
+            required.append('user_id')
+        missing = [field for field in required if not data.get(field)]
+        if missing:
+            return
+        success, result = save_crossbank_report(data)
+        if success:
+            bot.reply_to(message, "✅ REPORT BERHASIL DISIMPAN!")
+    except:
+        pass
 
 @bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT CROSSBANK'))
 def handle_crossbank_message(message):
@@ -314,17 +542,58 @@ def handle_fee_message(message):
     cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']
 ))
 def handle_reset_only_text(message):
-    # ... (sama seperti sebelumnya)
-    pass
+    try:
+        text = message.text.strip()
+        first_line = text.split('\n')[0]
+        parts = first_line.split()
+        if len(parts) < 3:
+            return
+        user_id = parts[1]
+        asset = parts[2]
+        print(f"📩 Reset: {user_id} {asset}")
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
+            types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
+        )
+        bot.reply_to(
+            message,
+            f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+    except:
+        pass
 
-@bot.message_handler(content_types=['photo', 'document', 'video', 'audio', 'voice'])
-def ignore_all_media(message):
+# Handler untuk abaikan media lain (untuk reset password tetap ignore)
+@bot.message_handler(content_types=['document', 'video', 'audio', 'voice', 'sticker'])
+def ignore_other_media(message):
+    """Abaikan media lain (bukan photo)"""
     pass
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('ok_') or call.data.startswith('no_'))
 def handle_reset_callback(call):
-    # ... (sama seperti sebelumnya)
-    pass
+    try:
+        if call.data.startswith('ok_'):
+            _, cs_id, user_id, asset = call.data.split('_')
+            password = buat_password()
+            bot.send_message(call.message.chat.id, f"{user_id} - {asset}\nPassword baru : {password}")
+            bot.edit_message_text(
+                f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`",
+                call.message.chat.id,
+                call.message.message_id,
+                parse_mode='Markdown'
+            )
+            bot.answer_callback_query(call.id, "✅ Password dikirim")
+        elif call.data.startswith('no_'):
+            bot.send_message(call.message.chat.id, "❌ Permintaan ditolak Captain !!")
+            bot.edit_message_text("❌ *REQUEST DITOLAK*", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+            bot.answer_callback_query(call.id, "❌ Ditolak")
+    except:
+        try:
+            bot.answer_callback_query(call.id, "⚠️ Action gagal")
+        except:
+            pass
 
 # ========== BOT RUNNER ==========
 def run_bot():
@@ -341,7 +610,8 @@ if __name__ == "__main__":
     print("🤖 X-SISTEM BOT - MULTI FUNCTIONS")
     print("📱 /reset [ID] [ASSET] - Reset password")
     print("📊 /report - Pilih jenis report")
-    print("💉 Suntik Bank - Kirim format suntik")
+    print("💉 Suntik Bank - Kirim format suntik (dengan screenshot)")
+    print("📸 Screenshot disimpan untuk forward ke WhatsApp")
     print("🌐 Web server: http://0.0.0.0:${PORT}")
     print("⏰ Auto-pinger: Every 8 minutes")
     print("=" * 50)
@@ -356,5 +626,3 @@ if __name__ == "__main__":
     
     # Jalankan bot (main thread)
     run_bot()
-
-
