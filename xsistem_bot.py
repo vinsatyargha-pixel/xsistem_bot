@@ -326,6 +326,46 @@ def handle_injection_request(message):
     
     send_admin_confirmation(injection_data, message)
     bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin untuk konfirmasi.")
+    return
+    
+    # ========== TAMBAHAN BARU UNTUK REPORT ==========
+    # Priority 2: Check for REPORT in caption
+    if message.caption:
+        caption_upper = message.caption.upper()
+        report_keywords = ['REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
+                          'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE']
+        
+        for keyword in report_keywords:
+            if keyword in caption_upper:
+                logger.info(f"📸 Photo with REPORT in caption from {message.from_user.username}")
+                handle_report_from_caption(message.caption, message)
+                return
+    # ========== END TAMBAHAN ==========
+
+@bot.message_handler(func=lambda m: "Tolong suntik dari rek Tampungan KPS" in m.text)
+def handle_injection_request(message):
+    if any(cmd in message.text.lower() for cmd in ['/reset', '/repass', '/repas', 'report']):
+        return
+    
+    logger.info(f"📝 Text injection request from {message.from_user.username}")
+    msg_text = message.text
+    parsed_data = parse_injection_text(msg_text)
+    
+    # Tambah officer dari pengirim
+    if parsed_data['officer'] == "N/A":
+        parsed_data['officer'] = message.from_user.username or message.from_user.first_name
+    
+    injection_data = {
+        'text_data': parsed_data,
+        'user_id': message.from_user.id,
+        'officer': message.from_user.username or message.from_user.first_name,
+        'message_id': message.message_id,
+        'is_photo': False,
+        'photo_id': None
+    }
+    
+    send_admin_confirmation(injection_data, message)
+    bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin untuk konfirmasi.")
 
 # ========== CALLBACK HANDLER UNTUK SUNIK ==========
 @bot.callback_query_handler(func=lambda call: call.data.startswith('inj_'))
@@ -702,4 +742,5 @@ if __name__ == "__main__":
     
     # Jalankan bot (main thread)
     run_bot()
+
 
