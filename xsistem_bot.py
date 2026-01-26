@@ -358,20 +358,19 @@ def run_bot():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("X-SISTEM BOT - COMPLETE FEATURES")
-    print(f"Spreadsheet ID: {SPREADSHEET_ID}")
-    print(f"Target sheet: {TARGET_SHEET_NAME}")
-    print("Suntik Bank Features:")
+    print("🤖 X-SISTEM BOT - COMPLETE FEATURES")
+    print(f"📊 Spreadsheet ID: {SPREADSHEET_ID}")
+    print(f"📄 Target sheet: {TARGET_SHEET_NAME}")
+    print("📝 Suntik Bank Features:")
     print("   D: NO REK BANK (No Rek Bank)")
     print("   G: NOMINAL SUNTIK (Nominal Suntik)")
     print("   H: SALDO AKHIR BANK (Saldo Akhir Bank)")
     print("   K: APPROVER (Admin)")
-    print("Reset Password Features:")
+    print("🔄 Reset Password Features:")
     print("   /reset [ID] [ASSET] - Reset password")
-    print("Report Features:")
+    print("📊 Report Features:")
     print("   /report - Pilih jenis report")
-    print("   Support photo caption reports")
-    print("Admin: @Vingeance @bangjoshh")
+    print("👑 Admin: @Vingeance @bangjoshh")
     print("=" * 60)
     
     # Jalankan Flask di thread terpisah
@@ -11753,6 +11752,7 @@ if __name__ == "__main__":
     pinger_thread = threading.Thread(target=ping_self, daemon=True)
 
 Continue
+
 
 
 
