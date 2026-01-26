@@ -1,7 +1,3 @@
-
-Bot untuk Suntik Data Bank
-image.png
-PNG 98.35KB
 import telebot
 import random
 import string
@@ -11754,3 +11750,4 @@ if __name__ == "__main__":
     pinger_thread = threading.Thread(target=ping_self, daemon=True)
 
 Continue
+
