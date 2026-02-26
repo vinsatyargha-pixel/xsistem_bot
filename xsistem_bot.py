@@ -465,36 +465,56 @@ def handle_injection_request(message):
 def handle_injection_callback(call):
     try:
         logger.info(f"🔄 CALLBACK RECEIVED: {call.data}")
+        logger.info(f"   From: @{call.from_user.username} (ID: {call.from_user.id})")
         
+        # Parse callback data
         parts = call.data.split('_')
-        if len(parts) != 3:
+        if len(parts) < 3:
             bot.answer_callback_query(call.id, "❌ Format tidak valid")
             return
             
-        action = parts[1]
-        msg_id = int(parts[2])
+        action = parts[1]  # 'approve' atau 'decline'
+        msg_id = int(parts[2])  # message_id
         
         logger.info(f"   Action: {action}, Msg ID: {msg_id}")
-        logger.info(f"   From: {call.from_user.username} (ID: {call.from_user.id})")
         
+        # Cek apakah user adalah admin yang berwenang
+        caller_username = call.from_user.username
+        if caller_username not in ADMIN_USERNAMES:
+            logger.warning(f"⛔ Unauthorized attempt by @{caller_username}")
+            bot.answer_callback_query(call.id, "❌ Anda tidak memiliki akses untuk approve/reject!")
+            return
+        
+        # Ambil data injection
         data = pending_injections.get(msg_id)
         if not data:
             logger.error(f"❌ Data not found for msg_id: {msg_id}")
-            bot.answer_callback_query(call.id, "❌ Data tidak ditemukan.")
+            bot.answer_callback_query(call.id, "❌ Data tidak ditemukan atau sudah kadaluarsa.")
+            
+            # Update pesan di group
+            try:
+                bot.edit_message_text(
+                    chat_id=GROUP_ID,
+                    message_id=call.message.message_id,
+                    text="⚠️ **DATA SUDAH KADALUARSA**\n\nPermintaan ini sudah tidak valid.",
+                    parse_mode='Markdown'
+                )
+            except:
+                pass
             return
         
-        logger.info(f"✅ Data found for injection")
+        logger.info(f"✅ Data found for injection: {data}")
         
         if action == "approve":
             logger.info("🔄 Processing APPROVE...")
             
-            # Tentukan approver
-            if call.from_user.username == "Vingeance":
+            # Tentukan approver name berdasarkan username
+            if caller_username == "Vingeance":
                 approver_name = "Alvin"
-            elif call.from_user.username == "bangjoshh":
+            elif caller_username == "bangjoshh":
                 approver_name = "Joshua"
             else:
-                approver_name = call.from_user.username or "Admin"
+                approver_name = caller_username or "Admin"
             
             # UPDATE SEMUA DATA KE SPREADSHEET
             logger.info(f"📊 Updating ALL data to sheet '{TARGET_SHEET_NAME}'...")
@@ -502,42 +522,53 @@ def handle_injection_callback(call):
             
             if success:
                 logger.info("✅ ALL data recorded to spreadsheet")
+                response_text = "✅ Disetujui & SEMUA data tercatat di sheet X"
             else:
                 logger.error("❌ Failed to record data to spreadsheet")
+                response_text = "⚠️ Disetujui TAPI GAGAL mencatat ke spreadsheet"
             
             # Edit pesan di group
             new_text = (
-                f"✅ **DISETUJUI** oleh @{call.from_user.username or 'admin'}\n"
+                f"✅ **DISETUJUI** oleh @{caller_username}\n"
                 f"✍️ Approver: {approver_name}\n\n"
-                f"Bank: {data['jenis_bank']} ({data['nama_bank']})\n"
-                f"Rekening: {data['no_rek']}\n"
-                f"Nominal: {data['nominal']}\n"
-                f"Saldo: {data['saldo_akhir']}\n"
-                f"Asset: {data['asset']}\n"
-                f"Officer: {data['officer']}"
+                f"🏦 Bank: {data.get('jenis_bank', 'N/A')} ({data.get('nama_bank', 'N/A')})\n"
+                f"💳 Rekening: {data.get('no_rek', 'N/A')}\n"
+                f"💰 Nominal: {data.get('nominal', 'N/A')}\n"
+                f"📊 Saldo: {data.get('saldo_akhir', 'N/A')}\n"
+                f"📌 Asset: {data.get('asset', 'N/A')}\n"
+                f"👤 Officer: {data.get('officer', 'N/A')}"
             )
             
-            bot.edit_message_text(
-                chat_id=GROUP_ID,
-                message_id=call.message.message_id,
-                text=new_text,
-                parse_mode='Markdown'
-            )
+            try:
+                bot.edit_message_text(
+                    chat_id=GROUP_ID,
+                    message_id=call.message.message_id,
+                    text=new_text,
+                    parse_mode='Markdown'
+                )
+                logger.info(f"✅ Group message updated for approval")
+            except Exception as e:
+                logger.error(f"❌ Failed to edit group message: {e}")
             
-            bot.answer_callback_query(call.id, "✅ Disetujui & SEMUA data tercatat di sheet X")
+            bot.answer_callback_query(call.id, response_text)
             
         elif action == "decline":
             logger.info("🔄 Processing DECLINE...")
             
-            bot.edit_message_text(
-                chat_id=GROUP_ID,
-                message_id=call.message.message_id,
-                text=f"❌ **DITOLAK** oleh @{call.from_user.username or 'admin'}",
-                parse_mode='Markdown'
-            )
+            try:
+                bot.edit_message_text(
+                    chat_id=GROUP_ID,
+                    message_id=call.message.message_id,
+                    text=f"❌ **DITOLAK** oleh @{caller_username}",
+                    parse_mode='Markdown'
+                )
+                logger.info(f"✅ Group message updated for decline")
+            except Exception as e:
+                logger.error(f"❌ Failed to edit group message: {e}")
+            
             bot.answer_callback_query(call.id, "❌ Ditolak")
         
-        # Cleanup
+        # Cleanup - hapus dari pending setelah diproses
         if msg_id in pending_injections:
             del pending_injections[msg_id]
             logger.info(f"🗑️ Cleared pending injection: {msg_id}")
@@ -545,7 +576,7 @@ def handle_injection_callback(call):
     except Exception as e:
         logger.error(f"❌ CRITICAL ERROR in callback: {e}", exc_info=True)
         try:
-            bot.answer_callback_query(call.id, "❌ Error processing")
+            bot.answer_callback_query(call.id, "❌ Error processing request")
         except:
             pass
 
@@ -815,4 +846,5 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"❌ Bot crashed: {e}", exc_info=True)
         print(f"❌ Bot stopped: {e}")
+
 
