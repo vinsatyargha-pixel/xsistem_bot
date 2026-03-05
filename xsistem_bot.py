@@ -27,7 +27,7 @@ bot = telebot.TeleBot(TOKEN)
 
 ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]
 GROUP_ID = -1003855148883
-SPREADSHEET_ID = "1RJabYiQePFtWV4Y8zrjchQmmx7CRPIwjvl-3mFvyWyc"
+SPREADSHEET_ID = "1RJabYiQePFtWV4Y8zrjchQmmx7CRPIwjvl"
 TARGET_SHEET_NAME = "X"
 
 pending_injections = {}
@@ -846,5 +846,6 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"❌ Bot crashed: {e}", exc_info=True)
         print(f"❌ Bot stopped: {e}")
+
 
 
