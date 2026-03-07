@@ -318,7 +318,7 @@ def parse_report_text(text):
 def save_crossbank_report(data):
     """Save report data to Google Apps Script"""
     try:
-        web_app_url = "https://script.google.com/macros/s/AKfycbwGpv7pgFrMRccC0y3IkkQxcehSX3D0nLMZYWkFtjywVF2AIpj4R1MEj5mtaYd-U_TLVw/exec"
+        web_app_url = "https://script.google.com/macros/s/AKfycbxstoyv-fjhTU9AifzvK3NQXhSoTIQ3mDWoerRPYAguO8UGjWuFlWUqZQ6KXGzVlDmTPg/exec"
         payload = {'message': {'text': data['original_text']}}
         response = requests.post(web_app_url, json=payload, timeout=10)
         return (True, "Data tersimpan") if response.status_code == 200 else (False, f"Error: {response.status_code}")
@@ -863,3 +863,4 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"❌ Bot crashed: {e}", exc_info=True)
         print(f"❌ Bot stopped: {e}")
+
