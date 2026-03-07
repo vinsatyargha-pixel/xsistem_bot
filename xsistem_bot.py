@@ -864,3 +864,4 @@ if __name__ == "__main__":
         logger.error(f"❌ Bot crashed: {e}", exc_info=True)
         print(f"❌ Bot stopped: {e}")
 
+
