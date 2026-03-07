@@ -290,7 +290,8 @@ def parse_report_text(text):
         first_line = lines[0].upper() if lines else ""
         report_types = [
             'REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
-            'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE'
+            'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE',
+            'REPORT KODE UNIK', 'REPORT BALANCING BANK'  # ✅ TAMBAHAN BARU
         ]
         
         for report_type in report_types:
@@ -422,7 +423,8 @@ def handle_photo_with_caption(message):
         caption_upper = caption.upper()
         report_keywords = [
             'REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
-            'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE'
+            'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE',
+            'REPORT KODE UNIK', 'REPORT BALANCING BANK'  # ✅ TAMBAHAN BARU
         ]
         
         for keyword in report_keywords:
@@ -619,7 +621,7 @@ Note: Bot akan ambil 2 kata pertama setelah command."""
 @bot.message_handler(commands=['formatreport'])
 def handle_format_report(message):
     try:
-        format_text = """📋 (PILIH SALAH SATU KATEGORI - JANGAN TYPO)
+        format_text = """📋 (PILIH SALAH SATU KATEGORI HEADER REPORT - JANGAN TYPO)
 
 REPORT CROSSBANK
 REPORT MISTAKE
@@ -627,6 +629,8 @@ REPORT FEE
 REPORT PENDINGAN
 REPORT PROCESS PENDINGAN
 REPORT REFUND
+REPORT KODE UNIK
+REPORT BALANCING BANK
 
 FORMAT:
 ASET: BTC (sesuaikan)
@@ -662,11 +666,13 @@ def handle_report_command(message):
             types.InlineKeyboardButton("🔄 PROCESS PENDINGAN", callback_data="report_process_pendingan"),
             types.InlineKeyboardButton("❌ MISTAKE", callback_data="report_mistake"),
             types.InlineKeyboardButton("↩️ REFUND", callback_data="report_refund"),
-            types.InlineKeyboardButton("💰 FEE", callback_data="report_fee")
+            types.InlineKeyboardButton("💰 FEE", callback_data="report_fee"),
+            types.InlineKeyboardButton("🔢 KODE UNIK", callback_data="report_kode_unik"),  # ✅ TAMBAHAN
+            types.InlineKeyboardButton("⚖️ BALANCING BANK", callback_data="report_balancing_bank")  # ✅ TAMBAHAN
         )
         bot.reply_to(
             message,
-            "📊 *PILIH JENIS REPORT:*\n\nAtau ketik langsung:\n• REPORT CROSSBANK\n• REPORT PENDINGAN\n• REPORT MISTAKE\n• dll...\n\nUntuk format lengkap: /formatreport",
+            "📊 *PILIH JENIS REPORT:*\n\nAtau ketik langsung:\n• REPORT CROSSBANK\n• REPORT PENDINGAN\n• REPORT MISTAKE\n• REPORT FEE\n• REPORT KODE UNIK\n• REPORT BALANCING BANK\n• REPORT REFUND\n• REPORT PROCESS PENDINGAN\n\nUntuk format lengkap: /formatreport",
             reply_markup=markup,
             parse_mode='Markdown'
         )
@@ -683,7 +689,9 @@ def handle_report_type(call):
             'process_pendingan': "\n🔄 *FORMAT REPORT PROCESS PENDINGAN*\n\nREPORT PROCESS PENDINGAN\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Proses Pendingan Deposit\nOFFICER: John Doe",
             'mistake': "\n❌ *FORMAT REPORT MISTAKE*\n\nREPORT MISTAKE\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Kesalahan Input Data\nOFFICER: John Doe",
             'refund': "\n↩️ *FORMAT REPORT REFUND*\n\nREPORT REFUND\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Pengembalian Dana\nOFFICER: John Doe",
-            'fee': "\n💰 *FORMAT REPORT FEE*\n\nREPORT FEE\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Biaya Admin/Operasional\nOFFICER: John Doe"
+            'fee': "\n💰 *FORMAT REPORT FEE*\n\nREPORT FEE\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Biaya Admin/Operasional\nOFFICER: John Doe",
+            'kode_unik': "\n🔢 *FORMAT REPORT KODE UNIK*\n\nREPORT KODE UNIK\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Kode Unik Tidak Sesuai\nOFFICER: John Doe",  # ✅ TAMBAHAN
+            'balancing_bank': "\n⚖️ *FORMAT REPORT BALANCING BANK*\n\nREPORT BALANCING BANK\nASET: BTC\nUSER ID: 123456\nBANK MEMBER: BCA\nBANK ASSET: Binance\nNO TICKET: TKT789\nAMOUNT: 5000000\nCASE: Selisih Saldo Bank\nOFFICER: John Doe"  # ✅ TAMBAHAN
         }
         bot.edit_message_text(
             formats[report_type] + "\n\n*Kirim pesan dengan format di atas*",
@@ -722,6 +730,15 @@ def handle_refund_message(message):
 @bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT FEE'))
 def handle_fee_message(message):
     handle_report_generic(message, 'FEE')
+
+# ========== HANDLER BARU UNTUK REPORT KODE UNIK & BALANCING BANK ==========
+@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT KODE UNIK'))
+def handle_kode_unik_message(message):
+    handle_report_generic(message, 'KODE UNIK')  # ✅ TAMBAHAN
+
+@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT BALANCING BANK'))
+def handle_balancing_bank_message(message):
+    handle_report_generic(message, 'BALANCING BANK')  # ✅ TAMBAHAN
 
 # ========== HANDLER RESET PASSWORD ==========
 @bot.message_handler(func=lambda m: m.text and not m.forward_from and any(
@@ -826,7 +843,7 @@ if __name__ == "__main__":
     print("   ✅ /report - Pilih jenis report")
     print("   ✅ Report via TEXT message")
     print("   ✅ Report via PHOTO caption")
-    print("   ✅ Support: CROSSBANK, PENDINGAN, MISTAKE, REFUND, FEE")
+    print("   ✅ Support: CROSSBANK, PENDINGAN, MISTAKE, REFUND, FEE, KODE UNIK, BALANCING BANK")
     print("=" * 60)
     print("👑 Admin: @Vingeance @bangjoshh")
     print("🌐 Render URL: https://cek-rekening-fi8f.onrender.com")
@@ -846,7 +863,3 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"❌ Bot crashed: {e}", exc_info=True)
         print(f"❌ Bot stopped: {e}")
-
-
-
-
