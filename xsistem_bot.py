@@ -32,7 +32,7 @@ TARGET_SHEET_NAME = "X"
 
 pending_injections = {}
 
-# ========== FLASK SERVER UNTUK RENDER ==========
+# ========== FLASK SERVER ==========
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -64,9 +64,8 @@ def ping_self():
             if response.status_code == 200:
                 logger.info(f"✅ [{now}] Ping successful")
             else:
-                logger.warning(f"⚠️ [{now}] Ping failed: {response.status_code}")
+                logger.warning(f"⚠️ [{now}] Ping failed")
         except Exception as e:
-            now = time.strftime("%H:%M:%S")
             logger.error(f"❌ [{now}] Ping error: {e}")
         time.sleep(480)
 
@@ -87,7 +86,9 @@ def get_sheet():
         all_sheets = spreadsheet.worksheets()
         for sheet in all_sheets:
             if sheet.title.upper() == TARGET_SHEET_NAME.upper():
+                logger.info(f"✅ Found sheet: {sheet.title}")
                 return sheet
+        logger.error(f"❌ Sheet '{TARGET_SHEET_NAME}' not found!")
         return None
     except Exception as e:
         logger.error(f"❌ Google Sheets error: {e}")
@@ -101,10 +102,10 @@ def find_empty_row(sheet):
                 return i + 1
         return len(column_d) + 1
     except Exception as e:
-        logger.error(f"❌ Error finding empty row: {e}")
+        logger.error(f"Error finding empty row: {e}")
         return 4
 
-# ========== FUNGSI SUNIK BANK ==========
+# ========== SUNIK BANK ==========
 def parse_injection_text(text):
     patterns = {
         'no_rek': r"No Rek Bank\s*:\s*(.+)",
@@ -128,17 +129,14 @@ def update_spreadsheet_all_data(data, approver_name):
         if not sheet:
             return False
         target_row = find_empty_row(sheet)
-        updates = [
-            ('D', [[data['no_rek']]]),
-            ('G', [[data['nominal']]]),
-            ('H', [[data['saldo_akhir']]]),
-            ('K', [[approver_name]])
-        ]
-        for col, value in updates:
-            sheet.update(range_name=f"{col}{target_row}", values=value)
+        sheet.update(range_name=f"D{target_row}", values=[[data['no_rek']]])
+        sheet.update(range_name=f"G{target_row}", values=[[data['nominal']]])
+        sheet.update(range_name=f"H{target_row}", values=[[data['saldo_akhir']]])
+        sheet.update(range_name=f"K{target_row}", values=[[approver_name]])
+        logger.info(f"✅ Data saved to row {target_row}")
         return True
     except Exception as e:
-        logger.error(f"❌ Failed to update spreadsheet: {e}")
+        logger.error(f"Failed update: {e}")
         return False
 
 def send_admin_confirmation(data, original_message):
@@ -165,7 +163,7 @@ def send_admin_confirmation(data, original_message):
             pass
     pending_injections[data['message_id']] = {**text_data, 'officer': data['officer'], 'user_id': data['user_id'], 'is_photo': data['is_photo'], 'admin_message_id': sent_msg.message_id}
 
-# ========== FUNGSI REPORT ==========
+# ========== REPORT ==========
 def parse_report_text(text):
     try:
         data = {'original_text': text}
@@ -190,9 +188,8 @@ def parse_report_text(text):
 def save_crossbank_report(data):
     try:
         web_app_url = "https://script.google.com/macros/s/AKfycbxstoyv-fjhTU9AifzvK3NQXhSoTIQ3mDWoerRPYAguO8UGjWuFlWUqZQ6KXGzVlDmTPg/exec"
-        payload = {'message': {'text': data['original_text']}}
-        response = requests.post(web_app_url, json=payload, timeout=10)
-        return (True, "Data tersimpan") if response.status_code == 200 else (False, f"Error: {response.status_code}")
+        response = requests.post(web_app_url, json={'message': {'text': data['original_text']}}, timeout=10)
+        return (True, "OK") if response.status_code == 200 else (False, f"Error {response.status_code}")
     except Exception as e:
         return False, str(e)
 
@@ -203,9 +200,9 @@ def handle_report_from_caption(caption_text, message):
             data['officer'] = message.from_user.username or message.from_user.first_name
         data['original_text'] = caption_text
         success, result = save_crossbank_report(data)
-        bot.reply_to(message, "✅ REPORT BERHASIL DISIMPAN!" if success else f"❌ Gagal menyimpan report: {result}")
+        bot.reply_to(message, "✅ REPORT BERHASIL DISIMPAN!" if success else f"❌ Gagal: {result}")
     except Exception as e:
-        bot.reply_to(message, "❌ Terjadi error saat memproses report")
+        bot.reply_to(message, "❌ Error")
 
 def handle_report_generic(message, report_type):
     try:
@@ -217,18 +214,62 @@ def handle_report_generic(message, report_type):
             data['officer'] = message.from_user.username or message.from_user.first_name
         data['original_text'] = text
         success, result = save_crossbank_report(data)
-        bot.reply_to(message, "✅ REPORT BERHASIL DISIMPAN!" if success else f"❌ Gagal menyimpan report: {result}")
+        bot.reply_to(message, "✅ REPORT BERHASIL DISIMPAN!" if success else f"❌ Gagal: {result}")
     except Exception as e:
-        bot.reply_to(message, "❌ Terjadi error saat memproses report")
+        bot.reply_to(message, "❌ Error")
 
-# ========== HANDLER SUNIK BANK ==========
+# ========== FUNGSI RESET ==========
+def buat_password():
+    return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(10))
+
+def extract_reset_info(text):
+    """Extract user_id dan asset dari teks reset"""
+    text_lower = text.lower()
+    
+    for cmd in ['/reset', '/repass', '/repas']:
+        cmd_pos = text_lower.find(cmd)
+        if cmd_pos != -1:
+            after_cmd = text[cmd_pos + len(cmd):].strip()
+            
+            # Hapus titik dua jika ada
+            if after_cmd.startswith(':'):
+                after_cmd = after_cmd[1:].strip()
+            elif after_cmd.startswith('：'):
+                after_cmd = after_cmd[1:].strip()
+            
+            # Split dan ambil 2 kata pertama
+            parts = after_cmd.split()
+            if len(parts) >= 2:
+                user_id = parts[0].strip()
+                asset = parts[1].strip()
+                user_id = re.sub(r'[^\w\-]', '', user_id)
+                asset = re.sub(r'[^\w\-]', '', asset)
+                if user_id and asset:
+                    return user_id, asset
+            
+            # Coba format dash
+            if '-' in after_cmd:
+                parts_dash = after_cmd.split('-', 1)
+                if len(parts_dash) >= 2:
+                    user_id = parts_dash[0].strip()
+                    asset = parts_dash[1].split()[0].strip() if parts_dash[1] else ''
+                    user_id = re.sub(r'[^\w\-]', '', user_id)
+                    asset = re.sub(r'[^\w\-]', '', asset)
+                    if user_id and asset:
+                        return user_id, asset
+    
+    return None, None
+
+# ========== HANDLER FOTO (GABUNGAN SEMUA) ==========
 @bot.message_handler(content_types=['photo'])
 def handle_photo_with_caption(message):
     caption = message.caption or ""
-    logger.info(f"📸 Received photo from {message.from_user.username}")
+    logger.info(f"📸 Photo from @{message.from_user.username}")
+    logger.info(f"   Caption: {caption[:100]}...")
     
-    # CEK SUNTIK BANK
+    # PRIORITY 1: SUNTIK BANK
     if "Tolong suntik dari rek Tampungan KPS" in caption:
+        logger.info("   → Detected: SUNTIK BANK")
         parsed_data = parse_injection_text(caption)
         if parsed_data['officer'] == "N/A":
             parsed_data['officer'] = message.from_user.username or message.from_user.first_name
@@ -241,22 +282,54 @@ def handle_photo_with_caption(message):
             'photo_id': message.photo[-1].file_id
         }
         send_admin_confirmation(injection_data, message)
-        bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin untuk konfirmasi.")
+        bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin.")
         return
     
-    # CEK REPORT
-    if caption:
-        caption_upper = caption.upper()
-        report_keywords = ['REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN', 'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE', 'REPORT KODE UNIK', 'REPORT BALANCING BANK']
-        for keyword in report_keywords:
-            if keyword in caption_upper:
-                handle_report_from_caption(caption, message)
-                return
+    # PRIORITY 2: REPORT
+    caption_upper = caption.upper()
+    report_keywords = ['REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
+                       'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE',
+                       'REPORT KODE UNIK', 'REPORT BALANCING BANK']
+    for keyword in report_keywords:
+        if keyword in caption_upper:
+            logger.info(f"   → Detected: REPORT")
+            handle_report_from_caption(caption, message)
+            return
+    
+    # PRIORITY 3: RESET PASSWORD
+    caption_lower = caption.lower()
+    reset_commands = ['/reset', '/repass', '/repas']
+    if any(cmd in caption_lower for cmd in reset_commands):
+        logger.info("   → Detected: RESET PASSWORD")
+        user_id, asset = extract_reset_info(caption)
+        
+        if user_id and asset:
+            logger.info(f"   → Reset: User={user_id}, Asset={asset}")
+            markup = types.InlineKeyboardMarkup(row_width=2)
+            markup.add(
+                types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
+                types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
+            )
+            bot.reply_to(
+                message,
+                f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
+                reply_markup=markup,
+                parse_mode='Markdown'
+            )
+        else:
+            logger.warning(f"   → Failed to extract reset info")
+        return
+    
+    # Jika tidak ada yang cocok
+    logger.info("   → Ignored (no matching pattern)")
 
+# ========== HANDLER TEXT UNTUK SUNTIK BANK ==========
 @bot.message_handler(func=lambda m: "Tolong suntik dari rek Tampungan KPS" in m.text)
 def handle_injection_request(message):
     if any(cmd in message.text.lower() for cmd in ['/reset', '/repass', '/repas', 'report']):
         return
+    
+    logger.info(f"📝 Text injection from {message.from_user.username}")
     parsed_data = parse_injection_text(message.text)
     if parsed_data['officer'] == "N/A":
         parsed_data['officer'] = message.from_user.username or message.from_user.first_name
@@ -269,7 +342,41 @@ def handle_injection_request(message):
         'photo_id': None
     }
     send_admin_confirmation(injection_data, message)
-    bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin untuk konfirmasi.")
+    bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin.")
+
+# ========== HANDLER TEXT UNTUK RESET ==========
+@bot.message_handler(func=lambda m: m.text and any(
+    cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']
+))
+def handle_reset_text(message):
+    # Skip suntik bank
+    if "Tolong suntik dari rek Tampungan KPS" in message.text:
+        return
+    
+    # Skip report
+    text_upper = message.text.upper()
+    report_keywords = ['REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
+                       'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE',
+                       'REPORT KODE UNIK', 'REPORT BALANCING BANK']
+    for keyword in report_keywords:
+        if keyword in text_upper:
+            return
+    
+    user_id, asset = extract_reset_info(message.text)
+    if not user_id or not asset:
+        return
+    
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
+        types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
+    )
+    bot.reply_to(
+        message,
+        f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
+        reply_markup=markup,
+        parse_mode='Markdown'
+    )
 
 # ========== CALLBACK SUNTIK ==========
 @bot.callback_query_handler(func=lambda call: call.data.startswith('inj_'))
@@ -312,126 +419,24 @@ def handle_injection_callback(call):
             bot.answer_callback_query(call.id, "❌ Ditolak")
         del pending_injections[msg_id]
     except Exception as e:
-        logger.error(f"❌ Callback error: {e}")
+        logger.error(f"Callback error: {e}")
 
-# ========== FUNGSI RESET ==========
-def buat_password():
-    return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(10))
-
-def extract_reset_info(text):
-    """Extract user_id dan asset dari teks (case insensitive, support titik dua)"""
-    text_lower = text.lower()
-    
-    # Cari posisi command
-    for cmd in ['/reset', '/repass', '/repas']:
-        cmd_pos = text_lower.find(cmd)
-        if cmd_pos != -1:
-            # Ambil teks setelah command
-            after_cmd = text[cmd_pos + len(cmd):].strip()
-            
-            # Hapus titik dua jika ada
-            if after_cmd.startswith(':'):
-                after_cmd = after_cmd[1:].strip()
-            elif after_cmd.startswith('：'):
-                after_cmd = after_cmd[1:].strip()
-            
-            # Split dan ambil 2 kata pertama
-            parts = after_cmd.split()
-            if len(parts) >= 2:
-                user_id = parts[0].strip()
-                asset = parts[1].strip()
-                # Bersihkan karakter aneh
-                user_id = re.sub(r'[^\w\-]', '', user_id)
-                asset = re.sub(r'[^\w\-]', '', asset)
-                if user_id and asset:
-                    return user_id, asset
-            
-            # Coba format dengan dash
-            if '-' in after_cmd:
-                parts_dash = after_cmd.split('-', 1)
-                if len(parts_dash) >= 2:
-                    user_id = parts_dash[0].strip()
-                    asset = parts_dash[1].split()[0].strip() if parts_dash[1] else ''
-                    user_id = re.sub(r'[^\w\-]', '', user_id)
-                    asset = re.sub(r'[^\w\-]', '', asset)
-                    if user_id and asset:
-                        return user_id, asset
-    
-    return None, None
-
-# ========== HANDLER RESET - UNTUK TEXT MESSAGE ==========
-@bot.message_handler(func=lambda m: m.text and any(
-    cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']
-))
-def handle_reset_text(message):
-    # Skip kalo suntik bank
-    if "Tolong suntik dari rek Tampungan KPS" in message.text:
-        return
-    
-    # Skip kalo report
-    text_upper = message.text.upper()
-    report_keywords = ['REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
-                       'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE',
-                       'REPORT KODE UNIK', 'REPORT BALANCING BANK']
-    for keyword in report_keywords:
-        if keyword in text_upper:
-            return
-    
-    user_id, asset = extract_reset_info(message.text)
-    if not user_id or not asset:
-        logger.warning(f"⚠️ Gagal extract reset dari text: {message.text[:50]}")
-        return
-    
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(
-        types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
-        types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
-    )
-    bot.reply_to(
-        message,
-        f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
-        reply_markup=markup,
-        parse_mode='Markdown'
-    )
-
-# ========== HANDLER RESET - UNTUK CAPTION FOTO/VIDEO ==========
-# Handler ini bakal nangkep semua pesan yang punya caption (foto, video, dll)
-# TAPI fotonya DIABAIKAN, yang dilihat cuma captionnya
-@bot.message_handler(content_types=['photo', 'video', 'document', 'animation'], 
-                     func=lambda m: m.caption and any(cmd in m.caption.lower() for cmd in ['/reset', '/repass', '/repas']))
-def handle_reset_caption(message):
-    caption = message.caption
-    
-    # Skip kalo suntik bank
-    if "Tolong suntik dari rek Tampungan KPS" in caption:
-        return
-    
-    # Skip kalo report
-    caption_upper = caption.upper()
-    report_keywords = ['REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
-                       'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE',
-                       'REPORT KODE UNIK', 'REPORT BALANCING BANK']
-    for keyword in report_keywords:
-        if keyword in caption_upper:
-            return
-    
-    user_id, asset = extract_reset_info(caption)
-    if not user_id or not asset:
-        logger.warning(f"⚠️ Gagal extract reset dari caption: {caption[:50]}")
-        return
-    
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(
-        types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
-        types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
-    )
-    # reply_to akan membalas pesan termasuk fotonya
-    bot.reply_to(
-        message,
-        f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
-        reply_markup=markup,
-        parse_mode='Markdown'
-    )
+# ========== CALLBACK RESET ==========
+@bot.callback_query_handler(func=lambda call: call.data.startswith('ok_') or call.data.startswith('no_'))
+def handle_reset_callback(call):
+    try:
+        if call.data.startswith('ok_'):
+            _, cs_id, user_id, asset = call.data.split('_')
+            password = buat_password()
+            bot.send_message(call.message.chat.id, f"{user_id} - {asset}\nPassword baru : {password}")
+            bot.edit_message_text(f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+            bot.answer_callback_query(call.id, "✅ Password dikirim")
+        elif call.data.startswith('no_'):
+            bot.send_message(call.message.chat.id, "❌ Permintaan ditolak Captain !!")
+            bot.edit_message_text("❌ *REQUEST DITOLAK*", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+            bot.answer_callback_query(call.id, "❌ Ditolak")
+    except Exception as e:
+        logger.error(f"Reset callback error: {e}")
 
 # ========== COMMAND HANDLERS ==========
 @bot.message_handler(commands=['formatreset'])
@@ -443,7 +448,7 @@ def handle_format_reset(message):
 /repas GGWP123 XLY
 /repass GGWP123-XLY
 
-✅ Bisa pakai foto/video, yang penting captionnya berisi command di atas""")
+✅ Bisa pakai foto, yang penting captionnya berisi command di atas""")
 
 @bot.message_handler(commands=['formatreport'])
 def handle_format_report(message):
@@ -509,25 +514,8 @@ def handle_kode_unik_message(message): handle_report_generic(message, 'KODE UNIK
 @bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT BALANCING BANK'))
 def handle_balancing_bank_message(message): handle_report_generic(message, 'BALANCING BANK')
 
-# ========== CALLBACK RESET ==========
-@bot.callback_query_handler(func=lambda call: call.data.startswith('ok_') or call.data.startswith('no_'))
-def handle_reset_callback(call):
-    try:
-        if call.data.startswith('ok_'):
-            _, cs_id, user_id, asset = call.data.split('_')
-            password = buat_password()
-            bot.send_message(call.message.chat.id, f"{user_id} - {asset}\nPassword baru : {password}")
-            bot.edit_message_text(f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
-            bot.answer_callback_query(call.id, "✅ Password dikirim")
-        elif call.data.startswith('no_'):
-            bot.send_message(call.message.chat.id, "❌ Permintaan ditolak Captain !!")
-            bot.edit_message_text("❌ *REQUEST DITOLAK*", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
-            bot.answer_callback_query(call.id, "❌ Ditolak")
-    except:
-        pass
-
 # ========== IGNORE MEDIA LAIN ==========
-@bot.message_handler(content_types=['document', 'video', 'audio', 'voice', 'sticker', 'location', 'contact', 'poll'])
+@bot.message_handler(content_types=['document', 'video', 'audio', 'voice', 'sticker', 'location', 'contact', 'poll', 'animation'])
 def ignore_other_media(message):
     pass
 
@@ -536,9 +524,9 @@ def run_bot():
     logger.info("Starting Telegram Bot...")
     sheet = get_sheet()
     if sheet:
-        logger.info(f"✅ Connected to sheet")
+        logger.info(f"✅ Google Sheets connected")
     else:
-        logger.error("❌ Google Sheets connection FAILED")
+        logger.error("❌ Google Sheets FAILED")
     bot.polling(none_stop=True, timeout=30)
 
 if __name__ == "__main__":
@@ -546,7 +534,7 @@ if __name__ == "__main__":
     print("🤖 X-SISTEM BOT")
     print("=" * 60)
     print("💉 Suntik Bank: OK")
-    print("🔄 Reset: Bisa dari TEXT atau CAPTION FOTO/VIDEO")
+    print("🔄 Reset: Bisa dari TEXT atau CAPTION FOTO")
     print("📊 Report: OK")
     print("=" * 60)
     
