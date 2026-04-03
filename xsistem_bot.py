@@ -86,9 +86,7 @@ def get_sheet():
         all_sheets = spreadsheet.worksheets()
         for sheet in all_sheets:
             if sheet.title.upper() == TARGET_SHEET_NAME.upper():
-                logger.info(f"✅ Found sheet: {sheet.title}")
                 return sheet
-        logger.error(f"❌ Sheet '{TARGET_SHEET_NAME}' not found!")
         return None
     except Exception as e:
         logger.error(f"❌ Google Sheets error: {e}")
@@ -102,7 +100,6 @@ def find_empty_row(sheet):
                 return i + 1
         return len(column_d) + 1
     except Exception as e:
-        logger.error(f"Error finding empty row: {e}")
         return 4
 
 # ========== SUNIK BANK ==========
@@ -260,19 +257,33 @@ def extract_reset_info(text):
     
     return None, None
 
-# ========== HANDLER FOTO (GABUNGAN SEMUA) ==========
+# ========== HANDLER FOTO (GABUNGAN SEMUA - CASE INSENSITIVE) ==========
 @bot.message_handler(content_types=['photo'])
 def handle_photo_with_caption(message):
     caption = message.caption or ""
     logger.info(f"📸 Photo from @{message.from_user.username}")
-    logger.info(f"   Caption: {caption[:100]}...")
+    logger.info(f"   Caption: {caption[:200]}...")
     
-    # PRIORITY 1: SUNTIK BANK
-    if "Tolong suntik dari rek Tampungan KPS" in caption:
+    # Convert ke lower untuk pengecekan case insensitive
+    caption_lower = caption.lower()
+    
+    # PRIORITY 1: SUNTIK BANK (case insensitive)
+    if "tolong suntik dari rek tampungan kps" in caption_lower:
         logger.info("   → Detected: SUNTIK BANK")
+        
         parsed_data = parse_injection_text(caption)
+        
+        # Log hasil parsing
+        logger.info(f"   Parsed: no_rek={parsed_data['no_rek']}, nominal={parsed_data['nominal']}")
+        
+        # Jika officer tidak ditemukan, pakai username pengirim
         if parsed_data['officer'] == "N/A":
             parsed_data['officer'] = message.from_user.username or message.from_user.first_name
+        
+        # Jika asset tidak ditemukan, kasih default
+        if parsed_data['asset'] == "N/A":
+            parsed_data['asset'] = "Tidak diketahui"
+        
         injection_data = {
             'text_data': parsed_data,
             'user_id': message.from_user.id,
@@ -281,11 +292,12 @@ def handle_photo_with_caption(message):
             'is_photo': True,
             'photo_id': message.photo[-1].file_id
         }
+        
         send_admin_confirmation(injection_data, message)
-        bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin.")
+        bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin untuk konfirmasi.")
         return
     
-    # PRIORITY 2: REPORT
+    # PRIORITY 2: REPORT (case insensitive)
     caption_upper = caption.upper()
     report_keywords = ['REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
                        'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE',
@@ -296,8 +308,7 @@ def handle_photo_with_caption(message):
             handle_report_from_caption(caption, message)
             return
     
-    # PRIORITY 3: RESET PASSWORD
-    caption_lower = caption.lower()
+    # PRIORITY 3: RESET PASSWORD (case insensitive)
     reset_commands = ['/reset', '/repass', '/repas']
     if any(cmd in caption_lower for cmd in reset_commands):
         logger.info("   → Detected: RESET PASSWORD")
@@ -323,9 +334,10 @@ def handle_photo_with_caption(message):
     # Jika tidak ada yang cocok
     logger.info("   → Ignored (no matching pattern)")
 
-# ========== HANDLER TEXT UNTUK SUNTIK BANK ==========
-@bot.message_handler(func=lambda m: "Tolong suntik dari rek Tampungan KPS" in m.text)
+# ========== HANDLER TEXT UNTUK SUNTIK BANK (CASE INSENSITIVE) ==========
+@bot.message_handler(func=lambda m: m.text and "tolong suntik dari rek tampungan kps" in m.text.lower())
 def handle_injection_request(message):
+    # Skip kalo mengandung command reset/report
     if any(cmd in message.text.lower() for cmd in ['/reset', '/repass', '/repas', 'report']):
         return
     
@@ -344,13 +356,13 @@ def handle_injection_request(message):
     send_admin_confirmation(injection_data, message)
     bot.reply_to(message, "✅ Permintaan suntik bank telah dikirim ke admin.")
 
-# ========== HANDLER TEXT UNTUK RESET ==========
+# ========== HANDLER TEXT UNTUK RESET (CASE INSENSITIVE) ==========
 @bot.message_handler(func=lambda m: m.text and any(
     cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']
 ))
 def handle_reset_text(message):
     # Skip suntik bank
-    if "Tolong suntik dari rek Tampungan KPS" in message.text:
+    if "tolong suntik dari rek tampungan kps" in message.text.lower():
         return
     
     # Skip report
@@ -377,6 +389,31 @@ def handle_reset_text(message):
         reply_markup=markup,
         parse_mode='Markdown'
     )
+
+# ========== HANDLER REPORT TEXT (CASE INSENSITIVE) ==========
+@bot.message_handler(func=lambda m: m.text and m.text.upper().strip().startswith('REPORT CROSSBANK'))
+def handle_crossbank_message(message): handle_report_generic(message, 'CROSSBANK')
+
+@bot.message_handler(func=lambda m: m.text and m.text.upper().strip().startswith('REPORT PENDINGAN'))
+def handle_pendingan_message(message): handle_report_generic(message, 'PENDINGAN')
+
+@bot.message_handler(func=lambda m: m.text and m.text.upper().strip().startswith('REPORT PROCESS PENDINGAN'))
+def handle_process_pendingan_message(message): handle_report_generic(message, 'PROCESS PENDINGAN')
+
+@bot.message_handler(func=lambda m: m.text and m.text.upper().strip().startswith('REPORT MISTAKE'))
+def handle_mistake_message(message): handle_report_generic(message, 'MISTAKE')
+
+@bot.message_handler(func=lambda m: m.text and m.text.upper().strip().startswith('REPORT REFUND'))
+def handle_refund_message(message): handle_report_generic(message, 'REFUND')
+
+@bot.message_handler(func=lambda m: m.text and m.text.upper().strip().startswith('REPORT FEE'))
+def handle_fee_message(message): handle_report_generic(message, 'FEE')
+
+@bot.message_handler(func=lambda m: m.text and m.text.upper().strip().startswith('REPORT KODE UNIK'))
+def handle_kode_unik_message(message): handle_report_generic(message, 'KODE UNIK')
+
+@bot.message_handler(func=lambda m: m.text and m.text.upper().strip().startswith('REPORT BALANCING BANK'))
+def handle_balancing_bank_message(message): handle_report_generic(message, 'BALANCING BANK')
 
 # ========== CALLBACK SUNTIK ==========
 @bot.callback_query_handler(func=lambda call: call.data.startswith('inj_'))
@@ -496,24 +533,6 @@ def handle_report_type(call):
     bot.edit_message_text(f"📋 *FORMAT {report_type.upper()}*\n\n{formats.get(report_type, '')}\n\n*Kirim pesan dengan format di atas*", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
     bot.answer_callback_query(call.id, f"Format {report_type.upper()}")
 
-# ========== HANDLER REPORT ==========
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT CROSSBANK'))
-def handle_crossbank_message(message): handle_report_generic(message, 'CROSSBANK')
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT PENDINGAN'))
-def handle_pendingan_message(message): handle_report_generic(message, 'PENDINGAN')
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT PROCESS PENDINGAN'))
-def handle_process_pendingan_message(message): handle_report_generic(message, 'PROCESS PENDINGAN')
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT MISTAKE'))
-def handle_mistake_message(message): handle_report_generic(message, 'MISTAKE')
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT REFUND'))
-def handle_refund_message(message): handle_report_generic(message, 'REFUND')
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT FEE'))
-def handle_fee_message(message): handle_report_generic(message, 'FEE')
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT KODE UNIK'))
-def handle_kode_unik_message(message): handle_report_generic(message, 'KODE UNIK')
-@bot.message_handler(func=lambda m: m.text and m.text.strip().startswith('REPORT BALANCING BANK'))
-def handle_balancing_bank_message(message): handle_report_generic(message, 'BALANCING BANK')
-
 # ========== IGNORE MEDIA LAIN ==========
 @bot.message_handler(content_types=['document', 'video', 'audio', 'voice', 'sticker', 'location', 'contact', 'poll', 'animation'])
 def ignore_other_media(message):
@@ -531,11 +550,11 @@ def run_bot():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🤖 X-SISTEM BOT")
+    print("🤖 X-SISTEM BOT - CASE INSENSITIVE")
     print("=" * 60)
-    print("💉 Suntik Bank: OK")
-    print("🔄 Reset: Bisa dari TEXT atau CAPTION FOTO")
-    print("📊 Report: OK")
+    print("💉 Suntik Bank: OK (tolong suntik / TOLONG SUNTIK / ToLong SunTik)")
+    print("🔄 Reset: OK (/reset / /RESET / /ReSeT)")
+    print("📊 Report: OK (REPORT / Report / report)")
     print("=" * 60)
     
     flask_thread = threading.Thread(target=run_flask, daemon=True)
