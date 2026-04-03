@@ -291,7 +291,7 @@ def parse_report_text(text):
         report_types = [
             'REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
             'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE',
-            'REPORT KODE UNIK', 'REPORT BALANCING BANK'  # ✅ TAMBAHAN BARU
+            'REPORT KODE UNIK', 'REPORT BALANCING BANK'
         ]
         
         for report_type in report_types:
@@ -424,7 +424,7 @@ def handle_photo_with_caption(message):
         report_keywords = [
             'REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
             'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE',
-            'REPORT KODE UNIK', 'REPORT BALANCING BANK'  # ✅ TAMBAHAN BARU
+            'REPORT KODE UNIK', 'REPORT BALANCING BANK'
         ]
         
         for keyword in report_keywords:
@@ -433,8 +433,9 @@ def handle_photo_with_caption(message):
                 handle_report_from_caption(caption, message)
                 return
     
-    # Jika bukan suntik bank atau report, abaikan
-    logger.info(f"📸 Photo ignored (not suntik bank or report)")
+    # Jika bukan suntik bank atau report, lanjut ke handler reset
+    # JANGAN return dulu, biar handler reset yang proses
+    logger.info(f"📸 Photo caption not suntik/report, checking for reset...")
 
 @bot.message_handler(func=lambda m: "Tolong suntik dari rek Tampungan KPS" in m.text)
 def handle_injection_request(message):
@@ -587,127 +588,178 @@ def buat_password():
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(10))
 
+def extract_reset_info(text_content):
+    """Extract user_id dan asset dari berbagai format reset"""
+    lines = text_content.split('\n')
+    
+    for line in lines:
+        line_lower = line.lower().strip()
+        
+        # Cari baris yang mengandung command reset
+        for cmd in ['/reset', '/repass', '/repas']:
+            if cmd in line_lower:
+                # Hapus command dari line
+                # Format: "/reset : idd1005aw XLY" atau "/reset idd1005aw XLY" atau "/reset:idd1005aw XLY"
+                rest = line.replace(cmd, '').strip()
+                
+                # Hapus titik dua jika ada
+                if rest.startswith(':'):
+                    rest = rest[1:].strip()
+                elif rest.startswith('：'):  # Titik dua fullwidth
+                    rest = rest[1:].strip()
+                
+                # Split berdasarkan spasi atau dash
+                parts = rest.split()
+                if len(parts) >= 2:
+                    user_id = parts[0].strip()
+                    asset = parts[1].strip()
+                    # Bersihkan dari karakter aneh
+                    user_id = re.sub(r'[^\w\-]', '', user_id)
+                    asset = re.sub(r'[^\w\-]', '', asset)
+                    if user_id and asset:
+                        return user_id, asset
+                
+                # Coba format dengan dash
+                if '-' in rest:
+                    parts_dash = rest.split('-', 1)
+                    if len(parts_dash) >= 2:
+                        user_id = parts_dash[0].strip()
+                        asset = parts_dash[1].strip()
+                        user_id = re.sub(r'[^\w\-]', '', user_id)
+                        asset = re.sub(r'[^\w\-]', '', asset)
+                        if user_id and asset:
+                            return user_id, asset
+    
+    return None, None
+
 # ========== HANDLER RESET PASSWORD - UNIVERSAL ==========
-# Handler ini akan menangkap SEMUA pesan (text, photo, video, dll)
-# Selama mengandung kata /reset, /repass, atau /repas (case insensitive)
-@bot.message_handler(func=lambda m: True)
-def handle_all_reset_requests(message):
-    """Universal handler untuk reset password - membaca dari text ATAU caption, case insensitive"""
+# Handler untuk TEXT message (reset via text)
+@bot.message_handler(func=lambda m: m.text and not m.forward_from and any(
+    cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']
+))
+def handle_reset_text(message):
+    # Cek apakah ini suntik bank
+    if "Tolong suntik dari rek Tampungan KPS" in message.text:
+        return
     
-    # Ambil teks dari pesan (baik text biasa atau caption dari media)
-    text_content = message.text if message.text else (message.caption if message.caption else "")
-    
-    if not text_content:
-        return  # Tidak ada teks, abaikan
-    
-    # Cek apakah mengandung command reset (case insensitive)
-    text_lower = text_content.lower()
-    reset_commands = ['/reset', '/repass', '/repas']
-    
-    has_reset_command = any(cmd in text_lower for cmd in reset_commands)
-    
-    if not has_reset_command:
-        return  # Bukan command reset, abaikan
-    
-    # JANGAN ganggu suntik bank yang juga mengandung kata /reset
-    # Cek apakah ini pesan suntik bank
-    if "Tolong suntik dari rek Tampungan KPS" in text_content:
-        return  # Ini suntik bank, biar handler suntik yang proses
-    
-    # Cek apakah ini report (yang kebetulan mengandung /reset di teksnya)
-    text_upper = text_content.upper()
-    report_keywords = [
-        'REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
-        'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE',
-        'REPORT KODE UNIK', 'REPORT BALANCING BANK'
-    ]
+    # Cek apakah ini report
+    text_upper = message.text.upper()
+    report_keywords = ['REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
+                       'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE',
+                       'REPORT KODE UNIK', 'REPORT BALANCING BANK']
     for keyword in report_keywords:
         if keyword in text_upper:
-            return  # Ini report, biar handler report yang proses
-    
-    # PROSES RESET PASSWORD
-    try:
-        logger.info(f"🔄 Processing RESET request from {message.from_user.username}")
-        logger.info(f"   Content: {text_content[:100]}...")
-        
-        # Ambil baris pertama (command ada di awal)
-        first_line = text_content.split('\n')[0].strip()
-        
-        # Split berdasarkan spasi atau dash
-        # Format: /reset ID ASSET atau /reset ID-ASSET atau /repas ID ASSET
-        # Bersihkan command dari baris pertama
-        parts = None
-        for cmd in reset_commands:
-            # Hapus command dari awal string
-            if first_line.lower().startswith(cmd):
-                rest = first_line[len(cmd):].strip()
-                # Split rest menjadi parts (bisa pake spasi atau dash)
-                if '-' in rest:
-                    parts = rest.split('-', 1)
-                else:
-                    parts = rest.split()
-                break
-        
-        if not parts or len(parts) < 2:
-            logger.warning(f"⚠️ Invalid reset format: {first_line}")
             return
+    
+    try:
+        logger.info(f"🔄 Processing RESET from TEXT: {message.from_user.username}")
         
-        user_id = parts[0].strip()
-        asset = parts[1].strip()
+        user_id, asset = extract_reset_info(message.text)
         
         if not user_id or not asset:
-            logger.warning(f"⚠️ Missing user_id or asset")
+            logger.warning(f"⚠️ Could not extract from: {message.text[:100]}")
             return
         
-        logger.info(f"📩 Reset request: User: {user_id}, Asset: {asset}")
+        logger.info(f"📩 Reset: User={user_id}, Asset={asset}")
         
-        # Buat tombol konfirmasi
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
             types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
             types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
         )
         
-        # Kirim balasan
         bot.reply_to(
             message,
             f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
             reply_markup=markup,
             parse_mode='Markdown'
         )
-        
-        logger.info(f"✅ Reset request sent for approval")
+        logger.info("✅ Reset request sent")
         
     except Exception as e:
-        logger.error(f"❌ Error in reset handler: {e}", exc_info=True)
+        logger.error(f"❌ Reset text error: {e}", exc_info=True)
 
-# ========== COMMAND HANDLERS UNTUK FORMAT (tetap jalan) ==========
+# Handler untuk MEDIA (foto/video dll) yang mengandung command reset
+@bot.message_handler(content_types=['photo', 'document', 'video', 'audio', 'voice', 'sticker', 'animation'])
+def handle_reset_media(message):
+    # Ambil caption
+    caption = message.caption or ""
+    
+    if not caption:
+        return
+    
+    # Cek apakah mengandung command reset
+    caption_lower = caption.lower()
+    reset_commands = ['/reset', '/repass', '/repas']
+    has_reset = any(cmd in caption_lower for cmd in reset_commands)
+    
+    if not has_reset:
+        return
+    
+    # Cek apakah ini suntik bank
+    if "Tolong suntik dari rek Tampungan KPS" in caption:
+        return
+    
+    # Cek apakah ini report
+    caption_upper = caption.upper()
+    report_keywords = ['REPORT CROSSBANK', 'REPORT PENDINGAN', 'REPORT PROCESS PENDINGAN',
+                       'REPORT MISTAKE', 'REPORT REFUND', 'REPORT FEE',
+                       'REPORT KODE UNIK', 'REPORT BALANCING BANK']
+    for keyword in report_keywords:
+        if keyword in caption_upper:
+            return
+    
+    try:
+        logger.info(f"🔄 Processing RESET from MEDIA (photo/video): {message.from_user.username}")
+        logger.info(f"   Caption: {caption[:100]}...")
+        
+        user_id, asset = extract_reset_info(caption)
+        
+        if not user_id or not asset:
+            logger.warning(f"⚠️ Could not extract from caption: {caption[:100]}")
+            return
+        
+        logger.info(f"📩 Reset from media: User={user_id}, Asset={asset}")
+        
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
+            types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
+        )
+        
+        bot.reply_to(
+            message,
+            f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+        logger.info("✅ Reset request from media sent")
+        
+    except Exception as e:
+        logger.error(f"❌ Reset media error: {e}", exc_info=True)
+
+# ========== COMMAND HANDLERS UNTUK FORMAT ==========
 @bot.message_handler(commands=['formatreset'])
 def handle_format_reset(message):
     try:
         format_text = """📋 CONTOH FORMAT YANG BENAR:
 
 /repas ID ASSET
-BANK MEMBER
-BANK TUJUAN
-WALLET :
-OFFICER :
+/reset : ID ASSET
+/repass ID-ASSET
 
 ───────────────
-Contoh lengkap:
+Contoh:
+/reset : idd1005aw XLY
 /repas GGWP123 XLY
-BRI TRALALA 123456789101112
-BCA BLABLABLA 9876543210
-WALLET : 
-OFFICER : kamu
+/repass GGWP123-XLY
 
 ───────────────
-Trigger alternatif juga bisa:
-/reset GGWP123 XLY
-/repass GGWP123-XLY
-/reset GGWP123 XLY DANA BCA
+Bisa dengan atau tanpa spasi setelah titik dua:
+/reset:idd1005aw XLY
+/reset : idd1005aw XLY
 
-Note: Bot akan ambil 2 kata pertama setelah command."""
+Note: Bot akan ambil ID dan ASSET dari command"""
         bot.reply_to(message, format_text, parse_mode=None)
     except:
         pass
@@ -734,17 +786,6 @@ BANK ASSET: BCA MICKEY MOUSE 987654321 (sesuaikan)
 NO TICKET: D123456/W123456 (sesuaikan)
 AMOUNT: 50.000 (sesuaikan)
 CASE: Keterangan (sesuaikan)
-OFFICER: USER ID (punya kamu)
-
-Contoh:
-REPORT CROSSBANK
-ASET: BTC (sesuaikan)
-USER ID: LAPARBANG123 (sesuaikan)
-BANK MEMBER: BCA DONALD BEBEK 123456789 (sesuaikan)
-BANK ASSET: BCA MICKEY MOUSE 987654321 (sesuaikan)
-NO TICKET: D123456/W123456 (sesuaikan)
-AMOUNT: 50.000 (sesuaikan)
-CASE: KHILAF
 OFFICER: USER ID (punya kamu)"""
         bot.reply_to(message, format_text, parse_mode=None)
     except:
@@ -852,18 +893,12 @@ def handle_reset_callback(call):
             bot.send_message(call.message.chat.id, "❌ Permintaan ditolak Captain !!")
             bot.edit_message_text("❌ *REQUEST DITOLAK*", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
             bot.answer_callback_query(call.id, "❌ Ditolak")
-    except:
+    except Exception as e:
+        logger.error(f"Reset callback error: {e}")
         try:
             bot.answer_callback_query(call.id, "⚠️ Action gagal")
         except:
             pass
-
-# ========== HANDLER MEDIA LAINNYA (untuk diabaikan) ==========
-@bot.message_handler(content_types=['document', 'video', 'audio', 'voice', 'sticker', 'location', 'contact', 'poll', 'animation'])
-def ignore_all_media(message):
-    """Ignore semua media yang tidak relevan"""
-    # Sudah ditangani oleh universal handler reset jika ada command
-    pass
 
 # ========== BOT RUNNER ==========
 def run_bot():
@@ -905,8 +940,9 @@ if __name__ == "__main__":
     print("🔄 Reset Password Features (UNIVERSAL):")
     print("   ✅ /reset, /repass, /repas (CASE INSENSITIVE)")
     print("   ✅ Bisa di TEXT atau CAPTION FOTO/VIDEO")
-    print("   ✅ Support format: /reset ID ASSET atau /reset ID-ASSET")
-    print("   ✅ Semua huruf besar/kecil jalan: /RESET, /ReSeT, dll")
+    print("   ✅ Support format: /reset : ID ASSET (ada titik dua)")
+    print("   ✅ Support format: /reset ID ASSET (tanpa titik dua)")
+    print("   ✅ Support format: /reset:ID ASSET (tanpa spasi)")
     print("=" * 60)
     print("📊 Report Features:")
     print("   ✅ /report - Pilih jenis report")
