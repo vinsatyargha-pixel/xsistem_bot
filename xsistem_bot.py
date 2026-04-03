@@ -741,6 +741,7 @@ def handle_balancing_bank_message(message):
     handle_report_generic(message, 'BALANCING BANK')  # ✅ TAMBAHAN
 
 # ========== HANDLER RESET PASSWORD ==========
+# Handler untuk text RESET (tanpa foto)
 @bot.message_handler(func=lambda m: m.text and not m.forward_from and any(
     cmd in m.text.lower() for cmd in ['/reset', '/repass', '/repas']
 ))
@@ -754,6 +755,34 @@ def handle_reset_only_text(message):
         user_id = parts[1]
         asset = parts[2]
         logger.info(f"📩 Reset request: {user_id} {asset}")
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
+            types.InlineKeyboardButton("❌ Tolak", callback_data=f"no_{message.from_user.id}")
+        )
+        bot.reply_to(
+            message,
+            f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+    except:
+        pass
+
+# Handler UNTUK MEDIA (foto, video, dll) yang mengandung command reset
+# Ini yang baru - akan tetap merespon meskipun ada gambar
+@bot.message_handler(content_types=['photo', 'document', 'video', 'audio', 'voice', 'sticker', 'animation'], 
+                     func=lambda m: m.caption and any(cmd in m.caption.lower() for cmd in ['/reset', '/repass', '/repas']))
+def handle_reset_with_media(message):
+    try:
+        caption = message.caption.strip()
+        first_line = caption.split('\n')[0]
+        parts = first_line.split()
+        if len(parts) < 3:
+            return
+        user_id = parts[1]
+        asset = parts[2]
+        logger.info(f"📩 Reset request WITH MEDIA: {user_id} {asset}")
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
             types.InlineKeyboardButton("✅ Reset", callback_data=f"ok_{message.from_user.id}_{user_id}_{asset}"),
@@ -794,9 +823,12 @@ def handle_reset_callback(call):
             pass
 
 # ========== HANDLER MEDIA LAINNYA (untuk diabaikan) ==========
-@bot.message_handler(content_types=['document', 'video', 'audio', 'voice', 'sticker', 'location', 'contact', 'poll'])
+@bot.message_handler(content_types=['document', 'video', 'audio', 'voice', 'sticker', 'location', 'contact', 'poll', 'animation'])
 def ignore_all_media(message):
     """Ignore semua media yang tidak relevan"""
+    # KECUALI jika media mengandung caption reset (sudah ditangani handler di atas)
+    if message.caption and any(cmd in message.caption.lower() for cmd in ['/reset', '/repass', '/repas']):
+        return  # Sudah ditangani oleh handler reset_with_media
     pass
 
 # ========== BOT RUNNER ==========
@@ -838,6 +870,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print("🔄 Reset Password Features:")
     print("   ✅ /reset [ID] [ASSET] - Reset password")
+    print("   ✅ SUPPORT WITH PHOTO/VIDEO - Bot akan tetap merespon")
     print("=" * 60)
     print("📊 Report Features:")
     print("   ✅ /report - Pilih jenis report")
@@ -863,5 +896,3 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"❌ Bot crashed: {e}", exc_info=True)
         print(f"❌ Bot stopped: {e}")
-
-
