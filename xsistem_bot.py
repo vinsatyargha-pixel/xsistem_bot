@@ -217,7 +217,21 @@ def handle_report_generic(message, report_type):
 
 # ========== FUNGSI RESET ==========
 def buat_password():
-    return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(10))
+    import random
+    import string
+    
+    # Wajib: 1 huruf besar + 1 angka
+    huruf_besar = random.choice(string.ascii_uppercase)
+    angka_wajib = random.choice(string.digits)
+    
+    # Sisa 6 karakter: huruf kecil
+    sisa = ''.join(random.choices(string.ascii_lowercase, k=6))
+    
+    # Gabung dan acak
+    password_list = list(huruf_besar + angka_wajib + sisa)
+    random.shuffle(password_list)
+    
+    return ''.join(password_list)
 
 def extract_reset_info(text):
     """Extract user_id dan asset dari teks reset"""
