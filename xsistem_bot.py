@@ -6,7 +6,7 @@ import time
 import requests
 import os
 import threading
-import tempfilehttps://github.com/vinsatyargha-pixel/xsistem_bot/blob/main/xsistem_bot.py
+import tempfile  # https://github.com/vinsatyargha-pixel/xsistem_bot/blob/main/xsistem_bot.py
 from flask import Flask
 import re
 import gspread
