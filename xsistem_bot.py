@@ -6,7 +6,7 @@ import time
 import requests
 import os
 import threading
-import tempfile
+import tempfilehttps://github.com/vinsatyargha-pixel/xsistem_bot/blob/main/xsistem_bot.py
 from flask import Flask
 import re
 import gspread
@@ -27,7 +27,7 @@ bot = telebot.TeleBot(TOKEN)
 
 ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]
 GROUP_ID = -1003855148883
-SPREADSHEET_ID = "1LqonbZeiDDuJTlrPT9HhB_hOl6gTed4kNCi3t8c6tO0"
+SPREADSHEET_ID = "1iZEuN9k1cR5jIDHXEGPFyVPkZtERv5v6RzVmvb_RFLc"
 TARGET_SHEET_NAME = "X"
 
 pending_injections = {}
