@@ -476,18 +476,51 @@ def handle_injection_callback(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('ok_') or call.data.startswith('no_'))
 def handle_reset_callback(call):
     try:
+        # CEK APAKAH USER YANG MENGKLIK ADALAH @OfficerGroupX
+        caller_username = call.from_user.username
+        if caller_username == "OfficerGroupX":
+            bot.answer_callback_query(call.id, "❌ Maaf, Anda tidak memiliki izin untuk mereset password!", show_alert=True)
+            logger.warning(f"⚠️ {caller_username} diblokir dari reset password")
+            return
+        
         if call.data.startswith('ok_'):
             _, cs_id, user_id, asset = call.data.split('_')
             password = buat_password()
+            
+            # Kirim password ke CS yang request
             bot.send_message(call.message.chat.id, f"{user_id} - {asset}\nPassword baru : {password}")
-            bot.edit_message_text(f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+            
+            # Edit pesan asli menjadi approved
+            try:
+                bot.edit_message_text(
+                    f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`\n\n👤 Disetujui oleh: @{caller_username}", 
+                    call.message.chat.id, 
+                    call.message.message_id, 
+                    parse_mode='Markdown'
+                )
+            except:
+                pass
+            
             bot.answer_callback_query(call.id, "✅ Password dikirim")
+            
         elif call.data.startswith('no_'):
+            # Edit pesan asli menjadi ditolak
+            try:
+                bot.edit_message_text(
+                    f"❌ *REQUEST DITOLAK*\n\n👤 Ditolak oleh: @{caller_username}", 
+                    call.message.chat.id, 
+                    call.message.message_id, 
+                    parse_mode='Markdown'
+                )
+            except:
+                pass
+            
             bot.send_message(call.message.chat.id, "❌ Permintaan ditolak Captain !!")
-            bot.edit_message_text("❌ *REQUEST DITOLAK*", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
             bot.answer_callback_query(call.id, "❌ Ditolak")
+            
     except Exception as e:
         logger.error(f"Reset callback error: {e}")
+        bot.answer_callback_query(call.id, "❌ Terjadi kesalahan")
 
 # ========== COMMAND HANDLERS ==========
 @bot.message_handler(commands=['formatreset'])
