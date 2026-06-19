@@ -440,20 +440,23 @@ def handle_injection_callback(call):
         action = parts[1]
         msg_id = int(parts[2])
         caller_username = call.from_user.username
-        if caller_username not in ADMIN_USERNAMES:
-            bot.answer_callback_query(call.id, "❌ Anda tidak memiliki akses!")
+        
+        # MODIFIKASI: Cek apakah user adalah @OfficerGroupX (ditolak)
+        if caller_username == "OfficerGroupX":
+            bot.answer_callback_query(call.id, "❌ Maaf, Anda tidak memiliki izin untuk menyetujui suntik bank!", show_alert=True)
+            logger.warning(f"⚠️ {caller_username} diblokir dari approve suntik bank")
             return
+        
         data = pending_injections.get(msg_id)
         if not data:
             bot.answer_callback_query(call.id, "❌ Data tidak ditemukan")
             return
+        
         if action == "approve":
-            if caller_username == "Vingeance":
-                approver_name = "Alvin"
-            elif caller_username == "bangjoshh":
-                approver_name = "Joshua"
-            else:
-                approver_name = caller_username
+            # MODIFIKASI: Semua user kecuali OfficerGroupX bisa approve
+            # Tapi tetap pakai nama approver sesuai username
+            approver_name = caller_username  # Pakai username langsung
+            
             success = update_spreadsheet_all_data(data, approver_name)
             response_text = "✅ Disetujui & tercatat" if success else "⚠️ Disetujui tapi GAGAL tercatat"
             new_text = f"✅ **DISETUJUI** oleh @{caller_username}\n✍️ Approver: {approver_name}\n\n🏦 Bank: {data.get('jenis_bank', 'N/A')}\n💳 Rekening: {data.get('no_rek', 'N/A')}\n💰 Nominal: {data.get('nominal', 'N/A')}\n📊 Saldo: {data.get('saldo_akhir', 'N/A')}\n👤 Officer: {data.get('officer', 'N/A')}"
