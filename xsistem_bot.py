@@ -27,7 +27,7 @@ bot = telebot.TeleBot(TOKEN)
 
 ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]
 GROUP_ID = -1003855148883
-SPREADSHEET_ID = "1iZEuN9k1cR5jIDHXEGPFyVPkZtERv5v6RzVmvb_RFLc"
+SPREADSHEET_ID = "1Fl2YsqEQ7P4lWyesFxKiqZbPq233dPovmXocmn0x_6Y"
 TARGET_SHEET_NAME = "X"
 
 pending_injections = {}
