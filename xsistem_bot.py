@@ -479,19 +479,46 @@ def handle_injection_callback(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('ok_') or call.data.startswith('no_'))
 def handle_reset_callback(call):
     try:
-        # CEK APAKAH USER YANG MENGKLIK ADALAH @OfficerGroupX
         caller_username = call.from_user.username
+        
+        # CEK APAKAH USER YANG MENGKLIK ADALAH @OfficerGroupX
         if caller_username == "OfficerGroupX":
             bot.answer_callback_query(call.id, "❌ Maaf, Anda tidak memiliki izin untuk mereset password!", show_alert=True)
             logger.warning(f"⚠️ {caller_username} diblokir dari reset password")
             return
         
         if call.data.startswith('ok_'):
-            _, cs_id, user_id, asset = call.data.split('_')
+            # FIX: Parsing aman untuk username dengan underscore
+            # Format: ok_{cs_id}_{user_id}_{asset}
+            parts = call.data.split('_')
+            
+            if len(parts) < 4:
+                bot.answer_callback_query(call.id, "❌ Data tidak valid")
+                return
+            
+            # cs_id selalu di index 1
+            cs_id = parts[1]
+            
+            # user_id bisa mengandung underscore, gabungkan dari index 2 sampai sebelum terakhir
+            if len(parts) > 4:
+                # Ada underscore di username
+                user_id = '_'.join(parts[2:-1])
+            else:
+                # Username tanpa underscore
+                user_id = parts[2]
+            
+            # asset selalu di bagian terakhir
+            asset = parts[-1]
+            
+            logger.info(f"✅ RESET APPROVED by @{caller_username} for {user_id} ({asset})")
+            
             password = buat_password()
             
-            # Kirim password ke CS yang request
-            bot.send_message(call.message.chat.id, f"{user_id} - {asset}\nPassword baru : {password}")
+            # Kirim password ke group
+            bot.send_message(
+                call.message.chat.id, 
+                f"{user_id} - {asset}\nPassword baru : {password}"
+            )
             
             # Edit pesan asli menjadi approved
             try:
@@ -501,24 +528,42 @@ def handle_reset_callback(call):
                     call.message.message_id, 
                     parse_mode='Markdown'
                 )
-            except:
-                pass
+                # Hapus tombol
+                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
+            except Exception as e:
+                logger.error(f"Gagal edit pesan: {e}")
             
             bot.answer_callback_query(call.id, "✅ Password dikirim")
             
         elif call.data.startswith('no_'):
+            # FIX: Parsing aman untuk username dengan underscore di tolak
+            parts = call.data.split('_')
+            
+            if len(parts) >= 3:
+                if len(parts) > 3:
+                    # Ada underscore di username
+                    user_id = '_'.join(parts[2:])
+                else:
+                    user_id = parts[2]
+            else:
+                user_id = "Unknown"
+            
+            logger.info(f"❌ RESET DECLINED by @{caller_username} for {user_id}")
+            
             # Edit pesan asli menjadi ditolak
             try:
                 bot.edit_message_text(
-                    f"❌ *REQUEST DITOLAK*\n\n👤 Ditolak oleh: @{caller_username}", 
+                    f"❌ *RESET DITOLAK*\n\nUser: `{user_id}`\n👤 Ditolak oleh: @{caller_username}", 
                     call.message.chat.id, 
                     call.message.message_id, 
                     parse_mode='Markdown'
                 )
-            except:
-                pass
+                # Hapus tombol
+                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
+            except Exception as e:
+                logger.error(f"Gagal edit pesan: {e}")
             
-            bot.send_message(call.message.chat.id, "❌ Permintaan ditolak Captain !!")
+            bot.send_message(call.message.chat.id, f"❌ Permintaan reset untuk {user_id} ditolak oleh @{caller_username}")
             bot.answer_callback_query(call.id, "❌ Ditolak")
             
     except Exception as e:
