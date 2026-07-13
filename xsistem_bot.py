@@ -461,13 +461,13 @@ def handle_injection_callback(call):
             response_text = "✅ Disetujui & tercatat" if success else "⚠️ Disetujui tapi GAGAL tercatat"
             new_text = f"✅ **DISETUJUI** oleh @{caller_username}\n✍️ Approver: {approver_name}\n\n🏦 Bank: {data.get('jenis_bank', 'N/A')}\n💳 Rekening: {data.get('no_rek', 'N/A')}\n💰 Nominal: {data.get('nominal', 'N/A')}\n📊 Saldo: {data.get('saldo_akhir', 'N/A')}\n👤 Officer: {data.get('officer', 'N/A')}"
             try:
-                bot.edit_message_text(chat_id=GROUP_ID, message_id=call.message.message_id, text=new_text, parse_mode='Markdown')
+                bot.edit_message_text(chat_id=GROUP_ID, message_id=call.message.message_id, text=new_text, parse_mode='HTML')
             except:
                 pass
             bot.answer_callback_query(call.id, response_text)
         elif action == "decline":
             try:
-                bot.edit_message_text(chat_id=GROUP_ID, message_id=call.message.message_id, text=f"❌ **DITOLAK** oleh @{caller_username}", parse_mode='Markdown')
+                bot.edit_message_text(chat_id=GROUP_ID, message_id=call.message.message_id, text=f"❌ **DITOLAK** oleh @{caller_username}", parse_mode='HTML')
             except:
                 pass
             bot.answer_callback_query(call.id, "❌ Ditolak")
