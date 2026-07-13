@@ -479,44 +479,42 @@ def handle_injection_callback(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('ok_') or call.data.startswith('no_'))
 def handle_reset_callback(call):
     try:
+        # ===== INI YANG DIUBAH: Ambil username langsung dari Telegram =====
+        # Username dari Telegram akan otomatis mengandung underscore jika ada
         caller_username = call.from_user.username
+        if not caller_username:
+            caller_username = call.from_user.first_name or "Unknown"
         
-        # CEK APAKAH USER YANG MENGKLIK ADALAH @OfficerGroupX
-        if caller_username == "OfficerGroupX":
+        # CEK @OfficerGroupX (case insensitive)
+        if caller_username and caller_username.lower() == "officergroupx":
             bot.answer_callback_query(call.id, "❌ Maaf, Anda tidak memiliki izin untuk mereset password!", show_alert=True)
             logger.warning(f"⚠️ {caller_username} diblokir dari reset password")
             return
         
-        # ========== PERBAIKAN: Ambil data dari callback dengan cara yang lebih aman ==========
-        # Format: ok_{cs_id}_{user_id}_{asset} atau no_{cs_id}_{user_id}
-        # TAPI user_id bisa mengandung underscore (_)
-        
-        data_parts = call.data.split('_')
-        
+        # ===== PARSING CALLBACK DATA (untuk user_id dan asset) =====
         if call.data.startswith('ok_'):
-            # ok_{cs_id}_{user_id}_{asset}
-            # Contoh: ok_123456789_user_name_123_XLY
-            # data_parts = ['ok', '123456789', 'user', 'name', '123', 'XLY']
+            # Format: ok_{cs_id}_{user_id}_{asset}
+            # Contoh: ok_123456789_Wilysitia84_XLY
+            # Contoh dengan underscore di user_id: ok_123456789_user_name_123_XLY
             
-            if len(data_parts) < 4:
+            parts = call.data.split('_')
+            
+            if len(parts) < 4:
                 bot.answer_callback_query(call.id, "❌ Data tidak valid")
                 return
             
-            # cs_id selalu di index 1
-            cs_id = data_parts[1]
+            # cs_id di index 1
+            cs_id = parts[1]
             
-            # Cari asset di bagian akhir
-            asset = data_parts[-1]
+            # asset di bagian paling akhir
+            asset = parts[-1]
             
             # user_id adalah semua yang ada di antara cs_id dan asset
             # Gabungkan dari index 2 sampai sebelum terakhir
-            if len(data_parts) > 4:
-                # Ada underscore di username
-                user_id = '_'.join(data_parts[2:-1])
+            if len(parts) > 4:
+                user_id = '_'.join(parts[2:-1])
             else:
-                # Format sederhana: ok_123_456_XLY
-                # data_parts = ['ok', '123', '456', 'XLY']
-                user_id = data_parts[2]
+                user_id = parts[2]
             
             logger.info(f"✅ RESET APPROVED by @{caller_username} for {user_id} ({asset})")
             
@@ -528,7 +526,8 @@ def handle_reset_callback(call):
                 f"{user_id} - {asset}\nPassword baru : {password}"
             )
             
-            # Edit pesan asli menjadi approved
+            # ===== INI YANG DIUBAH: Pakai caller_username langsung =====
+            # caller_username sudah berisi username lengkap termasuk underscore
             try:
                 bot.edit_message_text(
                     f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`\n\n👤 Disetujui oleh: @{caller_username}", 
@@ -536,7 +535,6 @@ def handle_reset_callback(call):
                     call.message.message_id, 
                     parse_mode='Markdown'
                 )
-                # Hapus tombol
                 bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
             except Exception as e:
                 logger.error(f"Gagal edit pesan: {e}")
@@ -544,28 +542,23 @@ def handle_reset_callback(call):
             bot.answer_callback_query(call.id, "✅ Password dikirim")
             
         elif call.data.startswith('no_'):
-            # no_{cs_id}_{user_id}
-            # Contoh: no_123456789_user_name_123
-            # data_parts = ['no', '123456789', 'user', 'name', '123']
+            # Format: no_{cs_id}_{user_id}
+            parts = call.data.split('_')
             
-            if len(data_parts) < 3:
+            if len(parts) < 3:
                 bot.answer_callback_query(call.id, "❌ Data tidak valid")
                 return
             
-            # cs_id selalu di index 1
-            cs_id = data_parts[1]
+            cs_id = parts[1]
             
-            # user_id adalah semua yang ada setelah cs_id (index 2 sampai akhir)
-            if len(data_parts) > 3:
-                # Ada underscore di username
-                user_id = '_'.join(data_parts[2:])
+            # user_id adalah semua setelah cs_id
+            if len(parts) > 3:
+                user_id = '_'.join(parts[2:])
             else:
-                # Format sederhana: no_123_456
-                user_id = data_parts[2]
+                user_id = parts[2]
             
             logger.info(f"❌ RESET DECLINED by @{caller_username} for {user_id}")
             
-            # Edit pesan asli menjadi ditolak
             try:
                 bot.edit_message_text(
                     f"❌ *RESET DITOLAK*\n\nUser: `{user_id}`\n👤 Ditolak oleh: @{caller_username}", 
@@ -573,7 +566,6 @@ def handle_reset_callback(call):
                     call.message.message_id, 
                     parse_mode='Markdown'
                 )
-                # Hapus tombol
                 bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
             except Exception as e:
                 logger.error(f"Gagal edit pesan: {e}")
