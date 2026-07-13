@@ -475,74 +475,73 @@ def handle_injection_callback(call):
     except Exception as e:
         logger.error(f"Callback error: {e}")
 
-# ========== CALLBACK RESET ==========
+# ========== CALLBACK RESET (VERSI PALING SIMPEL) ==========
 @bot.callback_query_handler(func=lambda call: call.data.startswith('ok_') or call.data.startswith('no_'))
 def handle_reset_callback(call):
     try:
+        # ===== AMBIL USERNAME YANG KLIK =====
         caller_username = call.from_user.username
         if not caller_username:
             caller_username = call.from_user.first_name or "Unknown"
         
         # CEK @OfficerGroupX
         if caller_username and caller_username.lower() == "officergroupx":
-            bot.answer_callback_query(call.id, "❌ Maaf, Anda tidak memiliki izin untuk mereset password!", show_alert=True)
+            bot.answer_callback_query(call.id, "❌ Tidak punya izin!", show_alert=True)
             return
         
+        # ===== PARSING PAKAI find DAN rfind =====
         if call.data.startswith('ok_'):
-            # ===== INI YANG DIUBAH: Pake rsplit dari KANAN =====
-            # Format: ok_{cs_id}_{user_id}_{asset}
-            # Contoh: ok_123456789_Vingeance_7_XLY
+            raw = call.data[3:]  # hapus 'ok_'
             
-            # Hapus 'ok_'
-            data = call.data[3:]  # 123456789_Vingeance_7_XLY
+            # Cari underscore terakhir (untuk asset)
+            last_underscore = raw.rfind('_')
+            asset = raw[last_underscore + 1:]
             
-            # rsplit dari kanan, ambil 1 bagian terakhir (asset)
-            parts = data.rsplit('_', 1)  # ['123456789_Vingeance_7', 'XLY']
+            # Ambil bagian cs_id + user_id
+            cs_user = raw[:last_underscore]
             
-            user_id_asset = parts[0]  # 123456789_Vingeance_7
-            asset = parts[1]  # XLY
-            
-            # Split dari kiri, ambil 1 bagian pertama (cs_id)
-            id_parts = user_id_asset.split('_', 1)  # ['123456789', 'Vingeance_7']
-            
-            cs_id = id_parts[0]  # 123456789
-            user_id = id_parts[1]  # Vingeance_7 (INI USER YANG DI RESET)
+            # Cari underscore pertama (untuk cs_id)
+            first_underscore = cs_user.find('_')
+            cs_id = cs_user[:first_underscore]
+            user_id = cs_user[first_underscore + 1:]
             
             # Generate password
             password = buat_password()
             
-            # Kirim password
+            # Kirim password ke group
             bot.send_message(
                 call.message.chat.id,
                 f"{user_id} - {asset}\nPassword baru : {password}"
             )
             
+            # ===== INI YANG PENTING: Edit pesan pake caller_username =====
+            # caller_username otomatis dapet @Vingeance_7 (termasuk underscore)
+            new_text = f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`\n\n👤 Disetujui oleh: @{caller_username}"
+            
             # Edit pesan
             bot.edit_message_text(
-                f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`\n\n👤 Disetujui oleh: @{caller_username}",
+                new_text,
                 call.message.chat.id,
                 call.message.message_id,
                 parse_mode='Markdown'
             )
+            
+            # Hapus tombol
             bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
             
             bot.answer_callback_query(call.id, "✅ Password dikirim")
             
         elif call.data.startswith('no_'):
-            # Format: no_{cs_id}_{user_id}
-            # Contoh: no_123456789_Vingeance_7
+            raw = call.data[3:]  # hapus 'no_'
             
-            data = call.data[3:]  # 123456789_Vingeance_7
+            first_underscore = raw.find('_')
+            cs_id = raw[:first_underscore]
+            user_id = raw[first_underscore + 1:]
             
-            # Split dari kiri, ambil 1 bagian pertama (cs_id)
-            id_parts = data.split('_', 1)  # ['123456789', 'Vingeance_7']
+            new_text = f"❌ *RESET DITOLAK*\n\nUser: `{user_id}`\n👤 Ditolak oleh: @{caller_username}"
             
-            cs_id = id_parts[0]
-            user_id = id_parts[1]
-            
-            # Edit pesan
             bot.edit_message_text(
-                f"❌ *RESET DITOLAK*\n\nUser: `{user_id}`\n👤 Ditolak oleh: @{caller_username}",
+                new_text,
                 call.message.chat.id,
                 call.message.message_id,
                 parse_mode='Markdown'
@@ -553,8 +552,13 @@ def handle_reset_callback(call):
             bot.answer_callback_query(call.id, "❌ Ditolak")
             
     except Exception as e:
-        logger.error(f"Reset callback error: {e}")
-        bot.answer_callback_query(call.id, "❌ Terjadi kesalahan")
+        logger.error(f"Reset error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        try:
+            bot.answer_callback_query(call.id, "❌ Error")
+        except:
+            pass
 
 # ========== COMMAND HANDLERS ==========
 @bot.message_handler(commands=['formatreset'])
