@@ -487,28 +487,36 @@ def handle_reset_callback(call):
             logger.warning(f"⚠️ {caller_username} diblokir dari reset password")
             return
         
+        # ========== PERBAIKAN: Ambil data dari callback dengan cara yang lebih aman ==========
+        # Format: ok_{cs_id}_{user_id}_{asset} atau no_{cs_id}_{user_id}
+        # TAPI user_id bisa mengandung underscore (_)
+        
+        data_parts = call.data.split('_')
+        
         if call.data.startswith('ok_'):
-            # FIX: Parsing aman untuk username dengan underscore
-            # Format: ok_{cs_id}_{user_id}_{asset}
-            parts = call.data.split('_')
+            # ok_{cs_id}_{user_id}_{asset}
+            # Contoh: ok_123456789_user_name_123_XLY
+            # data_parts = ['ok', '123456789', 'user', 'name', '123', 'XLY']
             
-            if len(parts) < 4:
+            if len(data_parts) < 4:
                 bot.answer_callback_query(call.id, "❌ Data tidak valid")
                 return
             
             # cs_id selalu di index 1
-            cs_id = parts[1]
+            cs_id = data_parts[1]
             
-            # user_id bisa mengandung underscore, gabungkan dari index 2 sampai sebelum terakhir
-            if len(parts) > 4:
+            # Cari asset di bagian akhir
+            asset = data_parts[-1]
+            
+            # user_id adalah semua yang ada di antara cs_id dan asset
+            # Gabungkan dari index 2 sampai sebelum terakhir
+            if len(data_parts) > 4:
                 # Ada underscore di username
-                user_id = '_'.join(parts[2:-1])
+                user_id = '_'.join(data_parts[2:-1])
             else:
-                # Username tanpa underscore
-                user_id = parts[2]
-            
-            # asset selalu di bagian terakhir
-            asset = parts[-1]
+                # Format sederhana: ok_123_456_XLY
+                # data_parts = ['ok', '123', '456', 'XLY']
+                user_id = data_parts[2]
             
             logger.info(f"✅ RESET APPROVED by @{caller_username} for {user_id} ({asset})")
             
@@ -536,17 +544,24 @@ def handle_reset_callback(call):
             bot.answer_callback_query(call.id, "✅ Password dikirim")
             
         elif call.data.startswith('no_'):
-            # FIX: Parsing aman untuk username dengan underscore di tolak
-            parts = call.data.split('_')
+            # no_{cs_id}_{user_id}
+            # Contoh: no_123456789_user_name_123
+            # data_parts = ['no', '123456789', 'user', 'name', '123']
             
-            if len(parts) >= 3:
-                if len(parts) > 3:
-                    # Ada underscore di username
-                    user_id = '_'.join(parts[2:])
-                else:
-                    user_id = parts[2]
+            if len(data_parts) < 3:
+                bot.answer_callback_query(call.id, "❌ Data tidak valid")
+                return
+            
+            # cs_id selalu di index 1
+            cs_id = data_parts[1]
+            
+            # user_id adalah semua yang ada setelah cs_id (index 2 sampai akhir)
+            if len(data_parts) > 3:
+                # Ada underscore di username
+                user_id = '_'.join(data_parts[2:])
             else:
-                user_id = "Unknown"
+                # Format sederhana: no_123_456
+                user_id = data_parts[2]
             
             logger.info(f"❌ RESET DECLINED by @{caller_username} for {user_id}")
             
