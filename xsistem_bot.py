@@ -339,7 +339,7 @@ def handle_photo_with_caption(message):
                 message,
                 f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
                 reply_markup=markup,
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
         else:
             logger.warning(f"   → Failed to extract reset info")
