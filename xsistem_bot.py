@@ -479,16 +479,19 @@ def handle_injection_callback(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('ok_') or call.data.startswith('no_'))
 def handle_reset_callback(call):
     try:
+        # ===== AMBIL USERNAME YANG KLIK =====
         caller_username = call.from_user.username
+        if not caller_username:
+            caller_username = call.from_user.first_name or "Unknown"
         
-        # CEK APAKAH USER YANG MENGKLIK ADALAH @OfficerGroupX
-        if caller_username == "OfficerGroupX":
+        # ===== CEK @OfficerGroupX (GA BOLEH KLIK) =====
+        if caller_username and caller_username.lower() == "officergroupx":
             bot.answer_callback_query(call.id, "❌ Maaf, Anda tidak memiliki izin untuk mereset password!", show_alert=True)
             logger.warning(f"⚠️ {caller_username} diblokir dari reset password")
             return
         
+        # ===== PROSES APPROVE =====
         if call.data.startswith('ok_'):
-            # FIX: Parsing aman untuk username dengan underscore
             # Format: ok_{cs_id}_{user_id}_{asset}
             parts = call.data.split('_')
             
@@ -496,20 +499,18 @@ def handle_reset_callback(call):
                 bot.answer_callback_query(call.id, "❌ Data tidak valid")
                 return
             
-            # cs_id selalu di index 1
             cs_id = parts[1]
             
             # user_id bisa mengandung underscore, gabungkan dari index 2 sampai sebelum terakhir
             if len(parts) > 4:
-                # Ada underscore di username
                 user_id = '_'.join(parts[2:-1])
             else:
-                # Username tanpa underscore
                 user_id = parts[2]
             
-            # asset selalu di bagian terakhir
             asset = parts[-1]
             
+            # ===== INI LOG YANG LU MAKSUD =====
+            # caller_username udah dapet username lengkap termasuk underscore
             logger.info(f"✅ RESET APPROVED by @{caller_username} for {user_id} ({asset})")
             
             password = buat_password()
@@ -528,20 +529,18 @@ def handle_reset_callback(call):
                     call.message.message_id, 
                     parse_mode='Markdown'
                 )
-                # Hapus tombol
                 bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
             except Exception as e:
                 logger.error(f"Gagal edit pesan: {e}")
             
             bot.answer_callback_query(call.id, "✅ Password dikirim")
-            
+        
+        # ===== PROSES DECLINE =====
         elif call.data.startswith('no_'):
-            # FIX: Parsing aman untuk username dengan underscore di tolak
             parts = call.data.split('_')
             
             if len(parts) >= 3:
                 if len(parts) > 3:
-                    # Ada underscore di username
                     user_id = '_'.join(parts[2:])
                 else:
                     user_id = parts[2]
@@ -550,7 +549,6 @@ def handle_reset_callback(call):
             
             logger.info(f"❌ RESET DECLINED by @{caller_username} for {user_id}")
             
-            # Edit pesan asli menjadi ditolak
             try:
                 bot.edit_message_text(
                     f"❌ *RESET DITOLAK*\n\nUser: `{user_id}`\n👤 Ditolak oleh: @{caller_username}", 
@@ -558,7 +556,6 @@ def handle_reset_callback(call):
                     call.message.message_id, 
                     parse_mode='Markdown'
                 )
-                # Hapus tombol
                 bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
             except Exception as e:
                 logger.error(f"Gagal edit pesan: {e}")
@@ -568,7 +565,12 @@ def handle_reset_callback(call):
             
     except Exception as e:
         logger.error(f"Reset callback error: {e}")
-        bot.answer_callback_query(call.id, "❌ Terjadi kesalahan")
+        import traceback
+        logger.error(traceback.format_exc())
+        try:
+            bot.answer_callback_query(call.id, "❌ Terjadi kesalahan")
+        except:
+            pass
 
 # ========== COMMAND HANDLERS ==========
 @bot.message_handler(commands=['formatreset'])
