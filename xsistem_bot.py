@@ -480,88 +480,74 @@ def handle_injection_callback(call):
 def handle_reset_callback(call):
     try:
         caller_username = call.from_user.username
+        if not caller_username:
+            caller_username = call.from_user.first_name or "Unknown"
         
-        # CEK APAKAH USER YANG MENGKLIK ADALAH @OfficerGroupX
-        if caller_username == "OfficerGroupX":
+        # CEK @OfficerGroupX
+        if caller_username and caller_username.lower() == "officergroupx":
             bot.answer_callback_query(call.id, "❌ Maaf, Anda tidak memiliki izin untuk mereset password!", show_alert=True)
-            logger.warning(f"⚠️ {caller_username} diblokir dari reset password")
             return
         
         if call.data.startswith('ok_'):
-            # FIX: Parsing aman untuk username dengan underscore
+            # ===== INI YANG DIUBAH: Pake rsplit dari KANAN =====
             # Format: ok_{cs_id}_{user_id}_{asset}
-            parts = call.data.split('_')
+            # Contoh: ok_123456789_Vingeance_7_XLY
             
-            if len(parts) < 4:
-                bot.answer_callback_query(call.id, "❌ Data tidak valid")
-                return
+            # Hapus 'ok_'
+            data = call.data[3:]  # 123456789_Vingeance_7_XLY
             
-            # cs_id selalu di index 1
-            cs_id = parts[1]
+            # rsplit dari kanan, ambil 1 bagian terakhir (asset)
+            parts = data.rsplit('_', 1)  # ['123456789_Vingeance_7', 'XLY']
             
-            # user_id bisa mengandung underscore, gabungkan dari index 2 sampai sebelum terakhir
-            if len(parts) > 4:
-                # Ada underscore di username
-                user_id = '_'.join(parts[2:-1])
-            else:
-                # Username tanpa underscore
-                user_id = parts[2]
+            user_id_asset = parts[0]  # 123456789_Vingeance_7
+            asset = parts[1]  # XLY
             
-            # asset selalu di bagian terakhir
-            asset = parts[-1]
+            # Split dari kiri, ambil 1 bagian pertama (cs_id)
+            id_parts = user_id_asset.split('_', 1)  # ['123456789', 'Vingeance_7']
             
-            logger.info(f"✅ RESET APPROVED by @{caller_username} for {user_id} ({asset})")
+            cs_id = id_parts[0]  # 123456789
+            user_id = id_parts[1]  # Vingeance_7 (INI USER YANG DI RESET)
             
+            # Generate password
             password = buat_password()
             
-            # Kirim password ke group
+            # Kirim password
             bot.send_message(
-                call.message.chat.id, 
+                call.message.chat.id,
                 f"{user_id} - {asset}\nPassword baru : {password}"
             )
             
-            # Edit pesan asli menjadi approved
-            try:
-                bot.edit_message_text(
-                    f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`\n\n👤 Disetujui oleh: @{caller_username}", 
-                    call.message.chat.id, 
-                    call.message.message_id, 
-                    parse_mode='Markdown'
-                )
-                # Hapus tombol
-                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
-            except Exception as e:
-                logger.error(f"Gagal edit pesan: {e}")
+            # Edit pesan
+            bot.edit_message_text(
+                f"✅ *RESET DISETUJUI*\n\nUser: `{user_id}`\nAsset: `{asset}`\nPassword: `{password}`\n\n👤 Disetujui oleh: @{caller_username}",
+                call.message.chat.id,
+                call.message.message_id,
+                parse_mode='Markdown'
+            )
+            bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
             
             bot.answer_callback_query(call.id, "✅ Password dikirim")
             
         elif call.data.startswith('no_'):
-            # FIX: Parsing aman untuk username dengan underscore di tolak
-            parts = call.data.split('_')
+            # Format: no_{cs_id}_{user_id}
+            # Contoh: no_123456789_Vingeance_7
             
-            if len(parts) >= 3:
-                if len(parts) > 3:
-                    # Ada underscore di username
-                    user_id = '_'.join(parts[2:])
-                else:
-                    user_id = parts[2]
-            else:
-                user_id = "Unknown"
+            data = call.data[3:]  # 123456789_Vingeance_7
             
-            logger.info(f"❌ RESET DECLINED by @{caller_username} for {user_id}")
+            # Split dari kiri, ambil 1 bagian pertama (cs_id)
+            id_parts = data.split('_', 1)  # ['123456789', 'Vingeance_7']
             
-            # Edit pesan asli menjadi ditolak
-            try:
-                bot.edit_message_text(
-                    f"❌ *RESET DITOLAK*\n\nUser: `{user_id}`\n👤 Ditolak oleh: @{caller_username}", 
-                    call.message.chat.id, 
-                    call.message.message_id, 
-                    parse_mode='Markdown'
-                )
-                # Hapus tombol
-                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
-            except Exception as e:
-                logger.error(f"Gagal edit pesan: {e}")
+            cs_id = id_parts[0]
+            user_id = id_parts[1]
+            
+            # Edit pesan
+            bot.edit_message_text(
+                f"❌ *RESET DITOLAK*\n\nUser: `{user_id}`\n👤 Ditolak oleh: @{caller_username}",
+                call.message.chat.id,
+                call.message.message_id,
+                parse_mode='Markdown'
+            )
+            bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
             
             bot.send_message(call.message.chat.id, f"❌ Permintaan reset untuk {user_id} ditolak oleh @{caller_username}")
             bot.answer_callback_query(call.id, "❌ Ditolak")
