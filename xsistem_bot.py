@@ -511,7 +511,7 @@ def handle_reset_callback(call):
             
             # ===== INI LOG YANG LU MAKSUD =====
             # caller_username udah dapet username lengkap termasuk underscore
-            logger.info(f"✅ RESET APPROVED by @{caller_username} for {user_id} ({asset})")
+            logger.info(f"✅ RESET APPROVED by {caller_username} for {user_id} ({asset})")
             
             password = buat_password()
             
@@ -547,7 +547,7 @@ def handle_reset_callback(call):
             else:
                 user_id = "Unknown"
             
-            logger.info(f"❌ RESET DECLINED by @{caller_username} for {user_id}")
+            logger.info(f"❌ RESET DECLINED by {caller_username} for {user_id}")
             
             try:
                 bot.edit_message_text(
