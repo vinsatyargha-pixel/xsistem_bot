@@ -554,7 +554,7 @@ def handle_reset_callback(call):
                     f"❌ *RESET DITOLAK*\n\nUser: `{user_id}`\n👤 Ditolak oleh: @{caller_username}", 
                     call.message.chat.id, 
                     call.message.message_id, 
-                    parse_mode='Markdown'
+                    parse_mode='HTML'
                 )
                 bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
             except Exception as e:
