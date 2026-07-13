@@ -152,7 +152,7 @@ def send_admin_confirmation(data, original_message):
         types.InlineKeyboardButton("✅ APPROVED", callback_data=f"inj_approve_{data['message_id']}"),
         types.InlineKeyboardButton("❌ DECLINE", callback_data=f"inj_decline_{data['message_id']}")
     )
-    sent_msg = bot.send_message(GROUP_ID, approval_msg, reply_markup=markup, parse_mode='Markdown')
+    sent_msg = bot.send_message(GROUP_ID, approval_msg, reply_markup=markup, parse_mode='HTML')
     if data['is_photo'] and data['photo_id']:
         try:
             bot.send_photo(GROUP_ID, data['photo_id'], caption=f"📸 Screenshot dari {data['officer']}")
