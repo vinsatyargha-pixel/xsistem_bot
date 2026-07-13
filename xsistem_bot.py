@@ -401,7 +401,7 @@ def handle_reset_text(message):
         message,
         f"🔔 *RESET REQUEST*\n\n👤 CS: {message.from_user.first_name}\n🆔 User: `{user_id}`\n🎮 Asset: `{asset}`\n\n**PILIH:**",
         reply_markup=markup,
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
 
 # ========== HANDLER REPORT TEXT (CASE INSENSITIVE) ==========
