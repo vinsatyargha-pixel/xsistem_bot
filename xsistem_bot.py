@@ -215,7 +215,7 @@ def handle_report_generic(message, report_type):
     except Exception as e:
         bot.reply_to(message, "❌ Error")
 
-# ========== FUNGSI RESET (FRASA KATA TERBACA - 3 TEMA UPDATED) ==========
+# ========== FUNGSI RESET (FRASA KATA TERBACA - JULUKAN CLUB & STADION) ==========
 def buat_password():
     """
     MEMBUAT PASSWORD DENGAN JAMINAN:
@@ -223,70 +223,46 @@ def buat_password():
     ✅ HURUF BESAR DI AWAL
     ✅ SISANYA HURUF KECIL
     ✅ ADA ANGKA 2-3 DIGIT
-    ✅ FRASA TERBACA (SLOT PRAGMATIC/PGSOFT | JULUKAN CLUB & LAPANGAN | GAME CASINO)
+    ✅ FRASA TERBACA (JULUKAN CLUB UNIK & STADIUM SEPAKBOLA)
     """
     import random
     import string
     
-    # ===== TEMA 1: SLOT TOP PRAGMATIC & PGSOFT =====
-    slot_words = [
-        # PRAGMATIC PLAY
-        "GATES", "OLYMPUS", "STARLIGHT", "PRINCESS", "SWEET", "BONANZA",
-        "WILD", "WEST", "GOLD", "MINE", "GREAT", "RHINO", "MEGAWAYS",
-        "CHICKEN", "DROP", "BIG", "BASS", "BONANZA", "MADAME", "DESTINY",
-        "PYRAMID", "KING", "QUEEN", "AZTEC", "GEMS", "JOKER", "FIRE",
-        "STRIKE", "HOT", "BURNING", "EMPIRE", "DRAGON", "TIGER",
-        "PHOENIX", "EAGLE", "SHARK", "WOLF", "GOLDEN", "BEAUTY",
-        "LUCKY", "DRAGON", "TREASURE", "MAHJONG", "WAYS",
-        # PGSOFT
-        "MAHJONG", "WAYS", "TREASURE", "DRAGON", "HOT", "BURNING",
-        "FORTUNE", "GODS", "THAI", "RICH", "WILD", "BANDIT", "SPIRIT",
-        "RACCOON", "PIGGY", "GOLD", "MEDUSA", "GODDESS", "EGYPT",
-        "BOOK", "MIGHTY", "RA", "ORIENTAL", "PROSPERITY", "LION",
-        "TIGER", "EMPIRE", "KING", "QUEEN", "JOKER", "GEMS"
-    ]
-    
-    # ===== TEMA 2: JULUKAN CLUB & LAPANGAN SEPAKBOLA =====
+    # ===== TEMA: JULUKAN CLUB UNIK & STADIUM =====
     football_words = [
-        # JULUKAN CLUB TERKENAL
-        "BLUES", "REDS", "GUNNERS", "SPURS", "CITYZENS", "REDDEVILS",
-        "LIVERPOOL", "CHELSEA", "ARSENAL", "MANCITY", "MANUTD", "TOTTENHAM",
-        "PSG", "REALMADRID", "BARCELONA", "BAYERN", "ACMILAN", "INTER",
-        "JUVENTUS", "DORTMUND", "ATLETICO", "NAPOLI", "ROMA", "LAZIO",
-        "MUNICH", "PARIS", "MADRID", "MILAN", "TURIN", "LONDON",
-        "MERSEYSIDE", "CATALAN", "ANDALUSIAN", "BASQUE", "VALENCIA",
-        "SEVILLA", "VILLAREAL", "BETIS", "ATHLETIC", "SOCiedad",
-        "BENFICA", "PORTO", "SPORTING", "AJAX", "PSV", "Feyenoord",
-        "CELTIC", "RANGERS", "GALATASARAY", "BESIKTAS", "FENERBAHCE",
+        # JULUKAN CLUB UNIK DARI SELURUH DUNIA
+        "ALBICELESTE", "NERAZZURI", "ROSSONERI", "BLAUGRANA", "MERENGUES",
+        "LOSBLANCOS", "LOSMERENGUES", "CULES", "MADRIDISTAS", "AZZURRI",
+        "BIANCONERI", "NEROAZZURRI", "VIOLA", "GIALLOROSSI", "LAZIALI",
+        "RAGAZZI", "BENGAL", "CURVA", "ULTRAS", "TIFOSI",
+        "REDS", "BLUES", "GUNNERS", "SPURS", "CITYZENS", "REDDEVILS",
+        "MAGPIES", "SAINTS", "HAMMERS", "VILLA", "WANDERERS",
+        "POTTIES", "TERRIERS", "BLADES", "COBBLERS", "PILGRIMS",
+        "GINGERBREADS", "SADDLERS", "BREWERS", "MILLERS", "ADDICKS",
+        "CHERRIES", "SEAGULLS", "HORNETS", "OWLS", "ROVERS",
+        "DONS", "IMPS", "GLADIATORS", "COTTAGERS", "BOURNEMOUTH",
+        "BRENTFORD", "BRIGHTON", "CRYSTAL", "PALACE", "EVERTON",
+        "FULHAM", "LEEDS", "LEICESTER", "NOTTINGHAM", "FOREST",
+        "SOUTHAMPTON", "WATFORD", "WESTBROM", "WOLVES",
+        "BAGGIES", "SKYBLUES", "TRACTORBOYS", "TERRIERS", "POSH",
+        "DONS", "SHRIMPERS", "PIRATES", "PILGRIMS", "GLADATORS",
         
-        # LAPANGAN / STADIUM
+        # STADIUM TERKENAL
         "CAMPNOU", "BERNABEU", "ANFIELD", "OLDTRAFFORD", "EMIRATES",
         "STAMFORD", "BRIDGE", "ETIHAD", "SANTIAGO", "ALLIANZ", "SANSIRO",
         "WEMBLEY", "MARACANA", "AZTECA", "WESTFALEN", "JUVENTUS",
         "OLYMPIC", "PRINCE", "ARENA", "STADIUM", "GROUND", "PARK",
         "LANE", "ROAD", "PLACE", "GARDEN", "VALLEY", "HILL", "VIEW",
-        "ALIANZ", "SIGNAL", "IDUNA", "PARK", "WANDA", "METROPOLITANO"
-    ]
-    
-    # ===== TEMA 3: GAME CASINO =====
-    casino_words = [
-        # PERMAINAN CASINO POPULER
-        "BLACKJACK", "ROULETTE", "POKER", "BACCARAT", "CRAPS", "KENO",
-        "BINGO", "SICBO", "PONTOON", "FARGO", "CASINO", "HOLDEM",
-        "TEXAS", "OMAHA", "STUDS", "DRAW", "CARIBBEAN", "THREE",
-        "CARD", "PAIGOW", "FAN", "TAN", "RED", "DOG", "WAR",
-        "HOLDEM", "OMAHA", "STUDS", "DRAW", "LOWBALL", "RAZZ",
-        "FIVECARD", "SEVENCARD", "TEXAS", "ROYAL", "FLUSH",
-        "WHEEL", "FORTUNE", "LUCKY", "GOLD", "DRAGON", "TIGER",
-        "PHOENIX", "DRAGONTIGER", "ANDAR", "BAHAR", "DICE",
-        "CHOP", "CHEF", "STREET", "FIELD", "ODD", "EVEN",
-        "FLUSH", "STRAIGHT", "PAIR", "TRIPLE", "FOUR", "KIND",
-        "FULL", "HOUSE", "POKER", "HIGH", "LOW", "ROYAL"
+        "ALIANZ", "SIGNAL", "IDUNA", "WANDA", "METROPOLITANO",
+        "GOODISON", "VILLAPARK", "STJAMES", "ELLAND", "KINGPOWER",
+        "CITYGROUND", "MOLINEUX", "KCOM", "VITALITY", "HAWTHORNS",
+        "AMERICANEXPRESS", "BRENTFORDCOMMUNITY", "CRAVEN", "DEEPDALE",
+        "FRATTON", "KASSAM", "MADEJSKI", "OAKWELL", "PRIDEPARK",
+        "RIVERSIDE", "STADION", "TURF", "MOOR", "VALLEY", "PARADE"
     ]
     
     # ===== GABUNGKAN SEMUA KATA =====
-    all_words = slot_words + football_words + casino_words
-    all_words = list(set(all_words))  # Hapus duplikat
+    all_words = list(set(football_words))  # Hapus duplikat
     
     # Filter kata 3-10 huruf
     all_words = [w for w in all_words if 3 <= len(w) <= 10]
@@ -322,9 +298,9 @@ def buat_password():
     
     # ===== FALLBACK =====
     fallback = [
-        "Gates78", "Olympus12", "Starlight34", "Princess56",
-        "Campnou67", "Bernabeu89", "Oldtrafford23", "Anfield45",
-        "Blackjack12", "Roulette34", "Poker56", "Baccarat78"
+        "Albiceleste12", "Nerazzuri34", "Rossoneri56", "Blaugrana78",
+        "Campnou12", "Bernabeu34", "Oldtrafford56", "Anfield78",
+        "Reddevils23", "Cityzens45", "Gunners67", "Spurs89"
     ]
     return random.choice(fallback)
 
