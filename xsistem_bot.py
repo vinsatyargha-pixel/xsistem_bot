@@ -215,15 +215,16 @@ def handle_report_generic(message, report_type):
     except Exception as e:
         bot.reply_to(message, "❌ Error")
 
-# ========== FUNGSI RESET (FRASA KATA TERBACA - JULUKAN CLUB & STADION) ==========
+# ========== FUNGSI RESET (FRASA KATA TERBACA - 1 KATA SAJA) ==========
 def buat_password():
     """
     MEMBUAT PASSWORD DENGAN JAMINAN:
-    ✅ PANJANG 8-20 KARAKTER (PASTI)
+    ✅ PANJANG 8-16 KARAKTER (PASTI)
     ✅ HURUF BESAR DI AWAL
     ✅ SISANYA HURUF KECIL
     ✅ ADA ANGKA 2-3 DIGIT
     ✅ FRASA TERBACA (JULUKAN CLUB UNIK & STADIUM SEPAKBOLA)
+    ✅ 1 KATA SAJA (TANPA GABUNGAN)
     """
     import random
     import string
@@ -232,75 +233,56 @@ def buat_password():
     football_words = [
         # JULUKAN CLUB UNIK DARI SELURUH DUNIA
         "ALBICELESTE", "NERAZZURI", "ROSSONERI", "BLAUGRANA", "MERENGUES",
-        "LOSBLANCOS", "LOSMERENGUES", "CULES", "MADRIDISTAS", "AZZURRI",
-        "BIANCONERI", "NEROAZZURRI", "VIOLA", "GIALLOROSSI", "LAZIALI",
-        "RAGAZZI", "BENGAL", "CURVA", "ULTRAS", "TIFOSI",
-        "REDS", "BLUES", "GUNNERS", "SPURS", "CITYZENS", "REDDEVILS",
-        "MAGPIES", "SAINTS", "HAMMERS", "VILLA", "WANDERERS",
+        "LOSBLANCOS", "AZZURRI", "BIANCONERI", "NEROAZZURRI", "VIOLA",
+        "GIALLOROSSI", "LAZIALI", "RAGAZZI", "REDDEVILS", "CITYZENS",
+        "GUNNERS", "MAGPIES", "SAINTS", "HAMMERS", "WANDERERS",
         "POTTIES", "TERRIERS", "BLADES", "COBBLERS", "PILGRIMS",
-        "GINGERBREADS", "SADDLERS", "BREWERS", "MILLERS", "ADDICKS",
-        "CHERRIES", "SEAGULLS", "HORNETS", "OWLS", "ROVERS",
-        "DONS", "IMPS", "GLADIATORS", "COTTAGERS", "BOURNEMOUTH",
-        "BRENTFORD", "BRIGHTON", "CRYSTAL", "PALACE", "EVERTON",
-        "FULHAM", "LEEDS", "LEICESTER", "NOTTINGHAM", "FOREST",
-        "SOUTHAMPTON", "WATFORD", "WESTBROM", "WOLVES",
-        "BAGGIES", "SKYBLUES", "TRACTORBOYS", "TERRIERS", "POSH",
-        "DONS", "SHRIMPERS", "PIRATES", "PILGRIMS", "GLADATORS",
+        "SADDLERS", "BREWERS", "MILLERS", "ADDICKS", "CHERRIES",
+        "SEAGULLS", "HORNETS", "ROVERS", "GLADIATORS", "COTTAGERS",
+        "BOURNEMOUTH", "BRENTFORD", "BRIGHTON", "CRYSTAL", "EVERTON",
+        "FULHAM", "LEICESTER", "FOREST", "SOUTHAMPTON", "WATFORD",
+        "WESTBROM", "WOLVES", "BAGGIES", "SKYBLUES", "TRACTORBOYS",
+        "SHRIMPERS", "PIRATES",
         
         # STADIUM TERKENAL
         "CAMPNOU", "BERNABEU", "ANFIELD", "OLDTRAFFORD", "EMIRATES",
-        "STAMFORD", "BRIDGE", "ETIHAD", "SANTIAGO", "ALLIANZ", "SANSIRO",
-        "WEMBLEY", "MARACANA", "AZTECA", "WESTFALEN", "JUVENTUS",
-        "OLYMPIC", "PRINCE", "ARENA", "STADIUM", "GROUND", "PARK",
-        "LANE", "ROAD", "PLACE", "GARDEN", "VALLEY", "HILL", "VIEW",
-        "ALIANZ", "SIGNAL", "IDUNA", "WANDA", "METROPOLITANO",
-        "GOODISON", "VILLAPARK", "STJAMES", "ELLAND", "KINGPOWER",
-        "CITYGROUND", "MOLINEUX", "KCOM", "VITALITY", "HAWTHORNS",
-        "AMERICANEXPRESS", "BRENTFORDCOMMUNITY", "CRAVEN", "DEEPDALE",
-        "FRATTON", "KASSAM", "MADEJSKI", "OAKWELL", "PRIDEPARK",
-        "RIVERSIDE", "STADION", "TURF", "MOOR", "VALLEY", "PARADE"
+        "STAMFORD", "SANTIAGO", "ALLIANZ", "SANSIRO", "WEMBLEY",
+        "MARACANA", "AZTECA", "WESTFALEN", "JUVENTUS", "OLYMPIC",
+        "METROPOLITANO", "GOODISON", "VILLAPARK", "STJAMES", "ELLAND",
+        "KINGPOWER", "CITYGROUND", "MOLINEUX", "VITALITY", "HAWTHORNS",
+        "DEEPDALE", "FRATTON", "KASSAM", "MADEJSKI", "OAKWELL",
+        "PRIDEPARK", "RIVERSIDE"
     ]
     
     # ===== GABUNGKAN SEMUA KATA =====
     all_words = list(set(football_words))  # Hapus duplikat
     
-    # Filter kata 3-10 huruf
-    all_words = [w for w in all_words if 3 <= len(w) <= 10]
+    # Filter kata 6-14 huruf (biar + 2 angka jadi 8-16)
+    all_words = [w for w in all_words if 6 <= len(w) <= 14]
     
     # ===== LOOP SAMPAI DAPAT YANG PAS =====
     for _ in range(500):
-        # Pilih 1-2 kata
-        jumlah_kata = random.choice([1, 2])
-        
-        if jumlah_kata == 1:
-            kata = random.choice(all_words)
-        else:
-            kata1 = random.choice(all_words)
-            kata2 = random.choice([w for w in all_words if w != kata1])
-            kata = kata1 + kata2
-        
-        # CEK: Panjang kata harus 5-17
-        if not (5 <= len(kata) <= 17):
-            continue
+        # Pilih 1 KATA SAJA
+        kata = random.choice(all_words)
         
         # Tentukan jumlah angka (2 atau 3)
         for digit in [2, 3]:
             total = len(kata) + digit
             
-            if 8 <= total <= 20:
+            if 8 <= total <= 16:
                 kata_lower = kata.lower()
                 kata_format = kata_lower[0].upper() + kata_lower[1:]
                 angka = ''.join(random.choices(string.digits, k=digit))
                 password = kata_format + angka
                 
-                if 8 <= len(password) <= 20:
+                if 8 <= len(password) <= 16:
                     return password
     
     # ===== FALLBACK =====
     fallback = [
         "Albiceleste12", "Nerazzuri34", "Rossoneri56", "Blaugrana78",
-        "Campnou12", "Bernabeu34", "Oldtrafford56", "Anfield78",
-        "Reddevils23", "Cityzens45", "Gunners67", "Spurs89"
+        "Campnou12", "Bernabeu34", "Anfield56", "Emirates78",
+        "Reddevils23", "Cityzens45", "Gunners67", "Magpies89"
     ]
     return random.choice(fallback)
 
