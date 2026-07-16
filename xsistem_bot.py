@@ -215,7 +215,7 @@ def handle_report_generic(message, report_type):
     except Exception as e:
         bot.reply_to(message, "❌ Error")
 
-# ========== FUNGSI RESET (FRASA KATA TERBACA - 3 TEMA) ==========
+# ========== FUNGSI RESET (FRASA KATA TERBACA - 3 TEMA UPDATED) ==========
 def buat_password():
     """
     MEMBUAT PASSWORD DENGAN JAMINAN:
@@ -223,50 +223,65 @@ def buat_password():
     ✅ HURUF BESAR DI AWAL
     ✅ SISANYA HURUF KECIL
     ✅ ADA ANGKA 2-3 DIGIT
-    ✅ FRASA TERBACA (SLOT/SEPAKBOLA/CASINO)
+    ✅ FRASA TERBACA (SLOT PRAGMATIC/PGSOFT | JULUKAN CLUB & LAPANGAN | GAME CASINO)
     """
     import random
     import string
     
-    # ===== TEMA 1: GAME SLOT =====
+    # ===== TEMA 1: SLOT TOP PRAGMATIC & PGSOFT =====
     slot_words = [
-        "WIN", "BET", "ACE", "REEL", "SLOT",
-        "SPIN", "WILD", "FREE", "GOLD", "STAR", "LUCK", "MEGA", 
-        "BONUS", "LUCKY", "TIGER", "EAGLE", "SHARK", "ROYAL", "CHERRY",
-        "JACKPOT", "DOUBLE", "TRIPLE", "SUPER", "ULTRA", "MONSTER",
-        "DRAGON", "PHOENIX", "FORTUNE", "LEGEND", "MYSTIC", "SAFARI",
-        "NINJA", "VIKING", "PRIZE", "RICH", "QUEEN", "DIAMOND",
-        "SCATTER", "MAXWIN", "PROSPERITY", "EMPIRE", "VOLCANO", 
-        "TREASURE", "EMERALD", "PYRAMID", "PHARAOH", "SAMURAI",
-        "THUNDER", "LIGHTNING", "PROGRESSIVE"
+        # PRAGMATIC PLAY
+        "GATES", "OLYMPUS", "STARLIGHT", "PRINCESS", "SWEET", "BONANZA",
+        "WILD", "WEST", "GOLD", "MINE", "GREAT", "RHINO", "MEGAWAYS",
+        "CHICKEN", "DROP", "BIG", "BASS", "BONANZA", "MADAME", "DESTINY",
+        "PYRAMID", "KING", "QUEEN", "AZTEC", "GEMS", "JOKER", "FIRE",
+        "STRIKE", "HOT", "BURNING", "EMPIRE", "DRAGON", "TIGER",
+        "PHOENIX", "EAGLE", "SHARK", "WOLF", "GOLDEN", "BEAUTY",
+        "LUCKY", "DRAGON", "TREASURE", "MAHJONG", "WAYS",
+        # PGSOFT
+        "MAHJONG", "WAYS", "TREASURE", "DRAGON", "HOT", "BURNING",
+        "FORTUNE", "GODS", "THAI", "RICH", "WILD", "BANDIT", "SPIRIT",
+        "RACCOON", "PIGGY", "GOLD", "MEDUSA", "GODDESS", "EGYPT",
+        "BOOK", "MIGHTY", "RA", "ORIENTAL", "PROSPERITY", "LION",
+        "TIGER", "EMPIRE", "KING", "QUEEN", "JOKER", "GEMS"
     ]
     
-    # ===== TEMA 2: SEPAKBOLA =====
+    # ===== TEMA 2: JULUKAN CLUB & LAPANGAN SEPAKBOLA =====
     football_words = [
-        "GOAL", "CUP", "FAN", "GAME", "FIFA", "UEFA",
-        "TEAM", "MATCH", "DERBY", "EURO",
-        "LALIGA", "MEDAL", "WINNER", "SOCCER", "TACKLE", "HEADER",
-        "STRIKER", "PENALTY", "CORNER", "OFFSIDE", "PREMIER", "TROPHY",
-        "CAPTAIN", "REFEREE", "STADIUM", "CLASSICO", "OFFENSE", "VOLLEY",
-        "CHAMPION", "VICTORY", "FREEKICK", "HATTRICK", "WORLDCUP", 
-        "CHAMPIONS", "LEAGUE", "ELCLASICO", "TRAFFORD", "CAMPNOU", 
-        "BERNABEU", "SANSIRO", "FOOTBALL", "PLAYMAKER", "DEFENDER", 
-        "GOALKEEPER", "MIDFIELDER"
+        # JULUKAN CLUB TERKENAL
+        "BLUES", "REDS", "GUNNERS", "SPURS", "CITYZENS", "REDDEVILS",
+        "LIVERPOOL", "CHELSEA", "ARSENAL", "MANCITY", "MANUTD", "TOTTENHAM",
+        "PSG", "REALMADRID", "BARCELONA", "BAYERN", "ACMILAN", "INTER",
+        "JUVENTUS", "DORTMUND", "ATLETICO", "NAPOLI", "ROMA", "LAZIO",
+        "MUNICH", "PARIS", "MADRID", "MILAN", "TURIN", "LONDON",
+        "MERSEYSIDE", "CATALAN", "ANDALUSIAN", "BASQUE", "VALENCIA",
+        "SEVILLA", "VILLAREAL", "BETIS", "ATHLETIC", "SOCiedad",
+        "BENFICA", "PORTO", "SPORTING", "AJAX", "PSV", "Feyenoord",
+        "CELTIC", "RANGERS", "GALATASARAY", "BESIKTAS", "FENERBAHCE",
+        
+        # LAPANGAN / STADIUM
+        "CAMPNOU", "BERNABEU", "ANFIELD", "OLDTRAFFORD", "EMIRATES",
+        "STAMFORD", "BRIDGE", "ETIHAD", "SANTIAGO", "ALLIANZ", "SANSIRO",
+        "WEMBLEY", "MARACANA", "AZTECA", "WESTFALEN", "JUVENTUS",
+        "OLYMPIC", "PRINCE", "ARENA", "STADIUM", "GROUND", "PARK",
+        "LANE", "ROAD", "PLACE", "GARDEN", "VALLEY", "HILL", "VIEW",
+        "ALIANZ", "SIGNAL", "IDUNA", "PARK", "WANDA", "METROPOLITANO"
     ]
     
-    # ===== TEMA 3: CASINO GAME =====
+    # ===== TEMA 3: GAME CASINO =====
     casino_words = [
-        "WIN", "BET", "ACE", "KING", "QUEEN", "JACK", "POKER",
-        "BLACK", "WHITE", "RED", "GOLD", "LUCK", "DICE", "CHIP",
-        "ROULETTE", "SLOTS", "BINGO", "KENO", "CRAPS", "BACCARAT",
-        "PONTOON", "SICBO", "FARGO",
-        "JACKPOT", "DOUBLE", "TRIPLE", "SUPER", "CASINO", "ROYAL",
-        "FLUSH", "STRAIGHT", "PAIR", "HOUSE", "DEALER", "PLAYER",
-        "BANKER", "TIE", "NATURAL", "PUSH",
-        "BLACKJACK", "PROGRESSIVE", "FORTUNE", "LEGEND",
-        "MYSTIC", "EMPIRE", "TREASURE", "PHARAOH", "SAMURAI",
-        "POKERFACE", "HIGHROLLER", "LUCKYSTAR", "GOLDENACE",
-        "DIAMONDKING", "SPADES", "HEARTS", "CLUBS"
+        # PERMAINAN CASINO POPULER
+        "BLACKJACK", "ROULETTE", "POKER", "BACCARAT", "CRAPS", "KENO",
+        "BINGO", "SICBO", "PONTOON", "FARGO", "CASINO", "HOLDEM",
+        "TEXAS", "OMAHA", "STUDS", "DRAW", "CARIBBEAN", "THREE",
+        "CARD", "PAIGOW", "FAN", "TAN", "RED", "DOG", "WAR",
+        "HOLDEM", "OMAHA", "STUDS", "DRAW", "LOWBALL", "RAZZ",
+        "FIVECARD", "SEVENCARD", "TEXAS", "ROYAL", "FLUSH",
+        "WHEEL", "FORTUNE", "LUCKY", "GOLD", "DRAGON", "TIGER",
+        "PHOENIX", "DRAGONTIGER", "ANDAR", "BAHAR", "DICE",
+        "CHOP", "CHEF", "STREET", "FIELD", "ODD", "EVEN",
+        "FLUSH", "STRAIGHT", "PAIR", "TRIPLE", "FOUR", "KIND",
+        "FULL", "HOUSE", "POKER", "HIGH", "LOW", "ROYAL"
     ]
     
     # ===== GABUNGKAN SEMUA KATA =====
@@ -307,9 +322,9 @@ def buat_password():
     
     # ===== FALLBACK =====
     fallback = [
-        "Jackpot78", "Champion12", "Victory34", "Striker56",
-        "Blackjack23", "Roulette45", "Pokerface67", "Casino89",
-        "Dragon23", "Tiger45", "Eagle67", "Lucky78"
+        "Gates78", "Olympus12", "Starlight34", "Princess56",
+        "Campnou67", "Bernabeu89", "Oldtrafford23", "Anfield45",
+        "Blackjack12", "Roulette34", "Poker56", "Baccarat78"
     ]
     return random.choice(fallback)
 
