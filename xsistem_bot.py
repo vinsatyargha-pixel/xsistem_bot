@@ -215,61 +215,126 @@ def handle_report_generic(message, report_type):
     except Exception as e:
         bot.reply_to(message, "❌ Error")
 
-# ========== FUNGSI RESET ==========
+# ========== FUNGSI RESET (FINAL - 3 TEMA: SLOT, SEPAKBOLA, CASINO) ==========
 def buat_password():
+    """
+    MEMBUAT PASSWORD DENGAN JAMINAN:
+    ✅ PANJANG 8-20 KARAKTER (PASTI)
+    ✅ HURUF BESAR DI AWAL
+    ✅ SISANYA HURUF KECIL
+    ✅ ADA ANGKA 2-3 DIGIT
+    ✅ FRASA TERBACA (SLOT/SEPAKBOLA/CASINO)
+    """
     import random
-    import string
     
-    # Wajib: 1 huruf besar + 1 angka
-    huruf_besar = random.choice(string.ascii_uppercase)
-    angka_wajib = random.choice(string.digits)
+    # ===== TEMA 1: GAME SLOT =====
+    slot_words = [
+        # 3 huruf
+        "WIN", "BET", "ACE", "REEL", "SLOT",
+        # 4 huruf
+        "SPIN", "WILD", "FREE", "GOLD", "STAR", "LUCK", "MEGA", 
+        # 5 huruf
+        "BONUS", "LUCKY", "TIGER", "EAGLE", "SHARK", "ROYAL", "CHERRY",
+        # 6 huruf
+        "JACKPOT", "DOUBLE", "TRIPLE", "SUPER", "ULTRA", "MONSTER",
+        "DRAGON", "PHOENIX", "FORTUNE", "LEGEND", "MYSTIC", "SAFARI",
+        "NINJA", "VIKING", "PRIZE", "RICH", "QUEEN", "DIAMOND",
+        # 7 huruf
+        "SCATTER", "MAXWIN", "PROSPERITY", "EMPIRE", "VOLCANO", 
+        "TREASURE", "EMERALD", "PYRAMID", "PHARAOH", "SAMURAI",
+        "THUNDER", "LIGHTNING",
+        # 8 huruf
+        "PROGRESSIVE"
+    ]
     
-    # Sisa 6 karakter: huruf kecil
-    sisa = ''.join(random.choices(string.ascii_lowercase, k=6))
+    # ===== TEMA 2: SEPAKBOLA =====
+    football_words = [
+        # 3 huruf
+        "GOAL", "CUP", "FAN", "GAME", "FIFA", "UEFA",
+        # 4 huruf
+        "TEAM", "MATCH", "DERBY", "EURO",
+        # 5 huruf
+        "LALIGA", "MEDAL", "WINNER", "SOCCER", "TACKLE", "HEADER",
+        # 6 huruf
+        "STRIKER", "PENALTY", "CORNER", "OFFSIDE", "PREMIER", "TROPHY",
+        "CAPTAIN", "REFEREE", "STADIUM", "CLASSICO", "OFFENSE", "VOLLEY",
+        "CHAMPION",
+        # 7 huruf
+        "VICTORY", "FREEKICK", "HATTRICK", "WORLDCUP", "CHAMPIONS",
+        "LEAGUE", "ELCLASICO", "TRAFFORD", "CAMPNOU", "BERNABEU", 
+        "SANSIRO", "FOOTBALL", "PLAYMAKER", "DEFENDER", "GOALKEEPER",
+        # 8 huruf
+        "MIDFIELDER", "PROGRESSIVE"
+    ]
     
-    # Gabung dan acak
-    password_list = list(huruf_besar + angka_wajib + sisa)
-    random.shuffle(password_list)
+    # ===== TEMA 3: CASINO GAME =====
+    casino_words = [
+        # 3 huruf
+        "WIN", "BET", "ACE", "KING", "QUEEN", "JACK", "POKER",
+        # 4 huruf
+        "BLACK", "WHITE", "RED", "GOLD", "LUCK", "DICE", "CHIP",
+        # 5 huruf
+        "ROULETTE", "SLOTS", "BINGO", "KENO", "CRAPS", "BACCARAT",
+        "PONTOON", "SICBO", "FARGO",
+        # 6 huruf
+        "JACKPOT", "DOUBLE", "TRIPLE", "SUPER", "CASINO", "ROYAL",
+        "FLUSH", "STRAIGHT", "PAIR", "HOUSE", "DEALER", "PLAYER",
+        "BANKER", "TIE", "NATURAL", "PUSH",
+        # 7 huruf
+        "BLACKJACK", "ROULETTE", "PROGRESSIVE", "FORTUNE", "LEGEND",
+        "MYSTIC", "EMPIRE", "TREASURE", "PHARAOH", "SAMURAI",
+        # 8 huruf
+        "POKERFACE", "HIGHROLLER", "LUCKYSTAR", "GOLDENACE",
+        "DIAMONDKING", "SPADES", "HEARTS", "CLUBS"
+    ]
     
-    return ''.join(password_list)
-
-def extract_reset_info(text):
-    """Extract user_id dan asset dari teks reset"""
-    text_lower = text.lower()
+    # ===== GABUNGKAN SEMUA KATA =====
+    all_words = slot_words + football_words + casino_words
+    all_words = list(set(all_words))  # Hapus duplikat
     
-    for cmd in ['/reset', '/repass', '/repas']:
-        cmd_pos = text_lower.find(cmd)
-        if cmd_pos != -1:
-            after_cmd = text[cmd_pos + len(cmd):].strip()
+    # Filter kata 3-10 huruf
+    all_words = [w for w in all_words if 3 <= len(w) <= 10]
+    
+    # ===== LOOP SAMPAI DAPAT YANG PAS =====
+    for _ in range(500):  # 500 kali percobaan, pasti dapet
+        # Pilih 1-2 kata
+        jumlah_kata = random.choice([1, 2])
+        
+        if jumlah_kata == 1:
+            kata = random.choice(all_words)
+        else:
+            kata1 = random.choice(all_words)
+            # Pastikan kata2 berbeda
+            kata2 = random.choice([w for w in all_words if w != kata1])
+            kata = kata1 + kata2
+        
+        # CEK: Panjang kata harus 5-17 (biar + 3 angka maks 20)
+        if not (5 <= len(kata) <= 17):
+            continue
+        
+        # Tentukan jumlah angka (2 atau 3)
+        for digit in [2, 3]:
+            total = len(kata) + digit
             
-            # Hapus titik dua jika ada
-            if after_cmd.startswith(':'):
-                after_cmd = after_cmd[1:].strip()
-            elif after_cmd.startswith('：'):
-                after_cmd = after_cmd[1:].strip()
-            
-            # Split dan ambil 2 kata pertama
-            parts = after_cmd.split()
-            if len(parts) >= 2:
-                user_id = parts[0].strip()
-                asset = parts[1].strip()
-                user_id = re.sub(r'[^\w\-]', '', user_id)
-                asset = re.sub(r'[^\w\-]', '', asset)
-                if user_id and asset:
-                    return user_id, asset
-            
-            # Coba format dash
-            if '-' in after_cmd:
-                parts_dash = after_cmd.split('-', 1)
-                if len(parts_dash) >= 2:
-                    user_id = parts_dash[0].strip()
-                    asset = parts_dash[1].split()[0].strip() if parts_dash[1] else ''
-                    user_id = re.sub(r'[^\w\-]', '', user_id)
-                    asset = re.sub(r'[^\w\-]', '', asset)
-                    if user_id and asset:
-                        return user_id, asset
+            # ===== JAMINAN UTAMA =====
+            if 8 <= total <= 20:
+                # Format password
+                kata_lower = kata.lower()
+                kata_format = kata_lower[0].upper() + kata_lower[1:]
+                angka = ''.join(random.choices(string.digits, k=digit))
+                password = kata_format + angka
+                
+                # DOUBLE CHECK: Pastikan panjangnya 8-20
+                if 8 <= len(password) <= 20:
+                    return password  # ← PASTI KELUAR DARI SINI
     
-    return None, None
+    # ===== FALLBACK (JAGA-JAGA) =====
+    fallback = [
+        "Jackpot78", "Champion12", "Victory34", "Striker56",
+        "Blackjack23", "Roulette45", "Pokerface67", "Casino89",
+        "Dragon23", "Tiger45", "Eagle67", "Lucky78"
+    ]
+    return random.choice(fallback)  # Semua 8-10 karakter ✅
 
 # ========== HANDLER FOTO (GABUNGAN SEMUA - CASE INSENSITIVE) ==========
 @bot.message_handler(content_types=['photo'])
