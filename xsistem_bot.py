@@ -215,7 +215,6 @@ def handle_report_generic(message, report_type):
     except Exception as e:
         bot.reply_to(message, "❌ Error")
 
-# ========== FUNGSI RESET (FRASA KATA TERBACA - 1 KATA SAJA) ==========
 def buat_password():
     """
     MEMBUAT PASSWORD DENGAN JAMINAN:
@@ -225,13 +224,14 @@ def buat_password():
     ✅ ADA ANGKA 2-3 DIGIT
     ✅ FRASA TERBACA (JULUKAN CLUB UNIK & STADIUM SEPAKBOLA)
     ✅ 1 KATA SAJA (TANPA GABUNGAN)
+    ✅ BERGANTIAN: JULUKAN CLUB ATAU NAMA STADIUM (RANDOM)
     """
     import random
     import string
     
-    # ===== TEMA: JULUKAN CLUB UNIK & STADIUM =====
-    football_words = [
-        # JULUKAN CLUB UNIK DARI SELURUH DUNIA
+    # ===== JULUKAN CLUB UNIK DARI SELURUH DUNIA =====
+    club_nicknames = [
+        # JULUKAN CLUB DUNIA
         "ALBICELESTE", "NERAZZURI", "ROSSONERI", "BLAUGRANA", "MERENGUES",
         "LOSBLANCOS", "AZZURRI", "BIANCONERI", "NEROAZZURRI", "VIOLA",
         "GIALLOROSSI", "LAZIALI", "RAGAZZI", "REDDEVILS", "CITYZENS",
@@ -242,27 +242,42 @@ def buat_password():
         "BOURNEMOUTH", "BRENTFORD", "BRIGHTON", "CRYSTAL", "EVERTON",
         "FULHAM", "LEICESTER", "FOREST", "SOUTHAMPTON", "WATFORD",
         "WESTBROM", "WOLVES", "BAGGIES", "SKYBLUES", "TRACTORBOYS",
-        "SHRIMPERS", "PIRATES",
-        
-        # STADIUM TERKENAL
+        "SHRIMPERS", "PIRATES", "FOXES", "SPURS", "CHELSEA",
+        "LIVERPOOL", "ARSENAL", "MANCITY", "MANUTD", "NEWCASTLE",
+        "ASTONVILLA", "NOTTINGHAM", "SHEFFIELD", "BURNLEY", "LUTON",
+        "IPSWICH", "PLYMOUTH", "SWANSEA", "CARDIFF", "NORWICH",
+        "MIDDLESBROUGH", "SUNDERLAND", "BLACKBURN", "BOLTON", "PRESTON",
+        "CHARLTON", "QPR", "MILLWALL", "READING", "DERBY",
+        "COVENTRY", "HUDDERSFIELD", "BARNSLEY", "ROTHERHAM", "WIGAN",
+        "HULL", "BIRMINGHAM", "STOKE", "SWINDON", "BRISTOL"
+    ]
+    
+    # ===== NAMA STADIUM TERKENAL =====
+    stadium_names = [
+        # STADIUM DUNIA
         "CAMPNOU", "BERNABEU", "ANFIELD", "OLDTRAFFORD", "EMIRATES",
         "STAMFORD", "SANTIAGO", "ALLIANZ", "SANSIRO", "WEMBLEY",
         "MARACANA", "AZTECA", "WESTFALEN", "JUVENTUS", "OLYMPIC",
         "METROPOLITANO", "GOODISON", "VILLAPARK", "STJAMES", "ELLAND",
         "KINGPOWER", "CITYGROUND", "MOLINEUX", "VITALITY", "HAWTHORNS",
         "DEEPDALE", "FRATTON", "KASSAM", "MADEJSKI", "OAKWELL",
-        "PRIDEPARK", "RIVERSIDE"
+        "PRIDEPARK", "RIVERSIDE", "ETIHAD", "TOTTENHAM", "LEEDS",
+        "HILLSBOROUGH", "BRAMALL", "KENILWORTH", "PORTMAN", "CARROW",
+        "AMERICAN", "DUNKIN", "SELECT", "TURFMOOR", "NEWYORK",
+        "LIBERTY", "DONCASTER", "KEEPMOAT", "STADIUM", "FIELDS",
+        "PARKEN", "ULENGAARD", "TELIA", "FRIENDS", "MURRAYFIELD",
+        "MILLENNIUM", "FALMER", "AMEX", "BRENTFORD", "CITY"
     ]
     
     # ===== GABUNGKAN SEMUA KATA =====
-    all_words = list(set(football_words))  # Hapus duplikat
+    all_words = list(set(club_nicknames + stadium_names))  # Hapus duplikat
     
     # Filter kata 6-14 huruf (biar + 2 angka jadi 8-16)
     all_words = [w for w in all_words if 6 <= len(w) <= 14]
     
     # ===== LOOP SAMPAI DAPAT YANG PAS =====
     for _ in range(500):
-        # Pilih 1 KATA SAJA
+        # Pilih 1 KATA SAJA (ACAK DARI SEMUA KATA)
         kata = random.choice(all_words)
         
         # Tentukan jumlah angka (2 atau 3)
@@ -282,7 +297,8 @@ def buat_password():
     fallback = [
         "Albiceleste12", "Nerazzuri34", "Rossoneri56", "Blaugrana78",
         "Campnou12", "Bernabeu34", "Anfield56", "Emirates78",
-        "Reddevils23", "Cityzens45", "Gunners67", "Magpies89"
+        "Reddevils23", "Cityzens45", "Gunners67", "Magpies89",
+        "Goodison12", "Riverside34", "Kassam56", "Wembley78"
     ]
     return random.choice(fallback)
 
