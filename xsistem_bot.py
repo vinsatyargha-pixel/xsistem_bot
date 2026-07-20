@@ -222,63 +222,35 @@ def buat_password():
     ✅ HURUF BESAR DI AWAL
     ✅ SISANYA HURUF KECIL
     ✅ ADA ANGKA 2-3 DIGIT
-    ✅ FRASA TERBACA (JULUKAN CLUB UNIK & STADIUM SEPAKBOLA)
+    ✅ FRASA TERBACA (NAMA SLOT)
     ✅ 1 KATA SAJA (TANPA GABUNGAN)
-    ✅ BERGANTIAN: JULUKAN CLUB ATAU NAMA STADIUM (RANDOM)
+    ✅ BERGANTIAN: NAMA SLOT (RANDOM)
     """
     import random
     import string
     
-    # ===== JULUKAN CLUB UNIK DARI SELURUH DUNIA =====
-    club_nicknames = [
-        # JULUKAN CLUB DUNIA
-        "ALBICELESTE", "NERAZZURI", "ROSSONERI", "BLAUGRANA", "MERENGUES",
-        "LOSBLANCOS", "AZZURRI", "BIANCONERI", "NEROAZZURRI", "VIOLA",
-        "GIALLOROSSI", "LAZIALI", "RAGAZZI", "REDDEVILS", "CITYZENS",
-        "GUNNERS", "MAGPIES", "SAINTS", "HAMMERS", "WANDERERS",
-        "POTTIES", "TERRIERS", "BLADES", "COBBLERS", "PILGRIMS",
-        "SADDLERS", "BREWERS", "MILLERS", "ADDICKS", "CHERRIES",
-        "SEAGULLS", "HORNETS", "ROVERS", "GLADIATORS", "COTTAGERS",
-        "BOURNEMOUTH", "BRENTFORD", "BRIGHTON", "CRYSTAL", "EVERTON",
-        "FULHAM", "LEICESTER", "FOREST", "SOUTHAMPTON", "WATFORD",
-        "WESTBROM", "WOLVES", "BAGGIES", "SKYBLUES", "TRACTORBOYS",
-        "SHRIMPERS", "PIRATES", "FOXES", "SPURS", "CHELSEA",
-        "LIVERPOOL", "ARSENAL", "MANCITY", "MANUTD", "NEWCASTLE",
-        "ASTONVILLA", "NOTTINGHAM", "SHEFFIELD", "BURNLEY", "LUTON",
-        "IPSWICH", "PLYMOUTH", "SWANSEA", "CARDIFF", "NORWICH",
-        "MIDDLESBROUGH", "SUNDERLAND", "BLACKBURN", "BOLTON", "PRESTON",
-        "CHARLTON", "QPR", "MILLWALL", "READING", "DERBY",
-        "COVENTRY", "HUDDERSFIELD", "BARNSLEY", "ROTHERHAM", "WIGAN",
-        "HULL", "BIRMINGHAM", "STOKE", "SWINDON", "BRISTOL"
+    # ===== NAMA SLOT =====
+    slot_names = [
+        "Olympus", "Bonanza", "AztecGem", "Mahjong", "WildBounty",
+        "BlackScatter", "Garuda", "Starlight", "Ganesha", "GatotKaca",
+        "AliBaba", "Athena", "Anubis", "Poseidon", "WildWest",
+        "MonkeyKing", "Safari", "SuperScatter", "Pharaoh", "Pyramid",
+        "SugarRush", "Medusa", "LuckyPiggy", "Asgardian", "WereWolf",
+        "Perseus", "Gladiator", "Dragon", "CryptoGold", "Megaways",
+        "DogHouse", "PowerOfNinja", "Samurai", "Cleopatra", "Egypts",
+        "Zombie", "LuckyNecko", "Yakuza", "Guardian", "Iguazu",
+        "Vampire", "Assassin", "Cowboy", "Pharaoh", "Deluxe",
+        "BigBass", "Atlantis", "Fortune", "Galaxy", "Barbarian",
+        "Frenzy"
     ]
-    
-    # ===== NAMA STADIUM TERKENAL =====
-    stadium_names = [
-        # STADIUM DUNIA
-        "CAMPNOU", "BERNABEU", "ANFIELD", "OLDTRAFFORD", "EMIRATES",
-        "STAMFORD", "SANTIAGO", "ALLIANZ", "SANSIRO", "WEMBLEY",
-        "MARACANA", "AZTECA", "WESTFALEN", "JUVENTUS", "OLYMPIC",
-        "METROPOLITANO", "GOODISON", "VILLAPARK", "STJAMES", "ELLAND",
-        "KINGPOWER", "CITYGROUND", "MOLINEUX", "VITALITY", "HAWTHORNS",
-        "DEEPDALE", "FRATTON", "KASSAM", "MADEJSKI", "OAKWELL",
-        "PRIDEPARK", "RIVERSIDE", "ETIHAD", "TOTTENHAM", "LEEDS",
-        "HILLSBOROUGH", "BRAMALL", "KENILWORTH", "PORTMAN", "CARROW",
-        "AMERICAN", "DUNKIN", "SELECT", "TURFMOOR", "NEWYORK",
-        "LIBERTY", "DONCASTER", "KEEPMOAT", "STADIUM", "FIELDS",
-        "PARKEN", "ULENGAARD", "TELIA", "FRIENDS", "MURRAYFIELD",
-        "MILLENNIUM", "FALMER", "AMEX", "BRENTFORD", "CITY"
-    ]
-    
-    # ===== GABUNGKAN SEMUA KATA =====
-    all_words = list(set(club_nicknames + stadium_names))  # Hapus duplikat
     
     # Filter kata 6-14 huruf (biar + 2 angka jadi 8-16)
-    all_words = [w for w in all_words if 6 <= len(w) <= 14]
+    slot_names = [w for w in slot_names if 6 <= len(w) <= 14]
     
     # ===== LOOP SAMPAI DAPAT YANG PAS =====
     for _ in range(500):
         # Pilih 1 KATA SAJA (ACAK DARI SEMUA KATA)
-        kata = random.choice(all_words)
+        kata = random.choice(slot_names)
         
         # Tentukan jumlah angka (2 atau 3)
         for digit in [2, 3]:
@@ -295,10 +267,9 @@ def buat_password():
     
     # ===== FALLBACK =====
     fallback = [
-        "Albiceleste12", "Nerazzuri34", "Rossoneri56", "Blaugrana78",
-        "Campnou12", "Bernabeu34", "Anfield56", "Emirates78",
-        "Reddevils23", "Cityzens45", "Gunners67", "Magpies89",
-        "Goodison12", "Riverside34", "Kassam56", "Wembley78"
+        "Olympus12", "Bonanza34", "Garuda56", "Starlight78",
+        "Ganesha12", "Athena34", "Dragon56", "Pharaoh78",
+        "Atlantis12", "Fortune34", "Galaxy56", "Frenzy78"
     ]
     return random.choice(fallback)
 
