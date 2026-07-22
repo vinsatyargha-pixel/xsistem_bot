@@ -31,8 +31,9 @@ ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]
 GROUP_ID = -1003855148883  # Grup utama (suntik WD)
 BREAK_GROUP_ID = -1004431538452  # Grup break produksi
 TEST_GROUP_ID = -1001234567890  # GANTI DENGAN ID GRUP TEST KAMU!
-SPREADSHEET_ID = "1Fl2YsqEQ7P4lWyesFxKiqZbPq233dPovmXocmn0x_6Y"
+SPREADSHEET_ID = "1kYxXST5ytlP4TM7OC9RG5Vohef-tgcBRRnKzz3FvQBw"  # GANTI DENGAN SPREADSHEET BREAK
 TARGET_SHEET_NAME = "X"
+BREAK_SHEET_NAME = "LOG BREAK"  # Sheet untuk log break
 
 # ========== TIMEZONE INDONESIA (WIB) - TANPA INSTALL ==========
 WIB = ZoneInfo('Asia/Jakarta')
@@ -45,11 +46,15 @@ def format_wib(dt):
     """Format datetime ke string WIB"""
     return dt.strftime('%H:%M:%S')
 
+def format_date_wib(dt):
+    """Format tanggal WIB"""
+    return dt.strftime('%d/%m/%Y')
+
 pending_injections = {}
 
 # ========== BREAK TIME TRACKING ==========
 BREAK_FILE = "break_data.json"
-break_data = {}  # Format: {user_id: {"start_time": datetime, "total_break": seconds, "is_on_break": bool}}
+break_data = {}  # Format: {user_id: {"start_time": datetime, "total_break": seconds, "is_on_break": bool, "username": str}}
 
 # Load data dari file jika ada
 def load_break_data():
@@ -77,7 +82,8 @@ def save_break_data():
             data_to_save[user_id] = {
                 'start_time': user_data['start_time'].isoformat() if user_data.get('start_time') else None,
                 'total_break': user_data.get('total_break', 0),
-                'is_on_break': user_data.get('is_on_break', False)
+                'is_on_break': user_data.get('is_on_break', False),
+                'username': user_data.get('username', '')
             }
         with open(BREAK_FILE, 'w') as f:
             json.dump(data_to_save, f, indent=2)
@@ -94,6 +100,110 @@ def format_duration(seconds):
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
     else:
         return f"{minutes:02d}:{secs:02d}"
+
+# ========== GOOGLE SHEETS ==========
+def get_sheet():
+    try:
+        SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+        if os.getenv("GOOGLE_CREDENTIALS_JSON"):
+            import json
+            creds_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
+            creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        else:
+            creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
+        
+        client = gspread.authorize(creds)
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        return spreadsheet
+    except Exception as e:
+        logger.error(f"❌ Google Sheets error: {e}")
+        return None
+
+def get_break_sheet():
+    """Mendapatkan sheet LOG BREAK"""
+    try:
+        spreadsheet = get_sheet()
+        if not spreadsheet:
+            return None
+        
+        # Cari sheet dengan nama LOG BREAK
+        all_sheets = spreadsheet.worksheets()
+        for sheet in all_sheets:
+            if sheet.title.upper() == BREAK_SHEET_NAME.upper():
+                return sheet
+        
+        # Jika belum ada, buat sheet baru
+        try:
+            new_sheet = spreadsheet.add_worksheet(title=BREAK_SHEET_NAME, rows=1000, cols=8)
+            # Buat header
+            headers = ['Nama telegram', 'Tanggal', 'Jam', 'Waktu Out', 'Waktu In', 'Akumulasi Waktu Break', 'Jam Reset_Break', 'Durasi Break']
+            new_sheet.append_row(headers)
+            logger.info(f"✅ Created new sheet: {BREAK_SHEET_NAME}")
+            return new_sheet
+        except Exception as e:
+            logger.error(f"❌ Failed to create sheet: {e}")
+            return None
+    except Exception as e:
+        logger.error(f"❌ Error getting break sheet: {e}")
+        return None
+
+def save_break_to_sheet(username, action, duration=0, total_break=0, reset=False):
+    """
+    Menyimpan data break ke Google Sheets
+    action: 'out', 'in', 'reset'
+    """
+    try:
+        sheet = get_break_sheet()
+        if not sheet:
+            logger.error("❌ Break sheet not found")
+            return False
+        
+        now = get_wib_time()
+        tanggal = format_date_wib(now)
+        jam = format_wib(now)
+        
+        if action == 'out':
+            # Waktu Out
+            row = [username, tanggal, jam, jam, '-', format_duration(total_break), '-', '-']
+            sheet.append_row(row)
+            logger.info(f"✅ Break OUT recorded for {username}")
+            return True
+            
+        elif action == 'in':
+            # Cari baris terakhir dengan username yang sama dan belum punya Waktu In
+            all_values = sheet.get_all_values()
+            if len(all_values) > 1:
+                # Cari dari bawah
+                for i in range(len(all_values)-1, 0, -1):
+                    row = all_values[i]
+                    if len(row) >= 5 and row[0] == username and row[4] == '-':
+                        # Update Waktu In
+                        sheet.update_cell(i+1, 5, jam)  # Kolom E = Waktu In
+                        # Update Akumulasi Waktu Break
+                        sheet.update_cell(i+1, 6, format_duration(total_break))
+                        # Update Durasi Break
+                        sheet.update_cell(i+1, 8, format_duration(duration))
+                        logger.info(f"✅ Break IN recorded for {username}")
+                        return True
+            
+            # Jika tidak ditemukan baris yang cocok, buat baru
+            row = [username, tanggal, jam, '-', jam, format_duration(total_break), '-', format_duration(duration)]
+            sheet.append_row(row)
+            logger.info(f"✅ Break IN recorded (new row) for {username}")
+            return True
+            
+        elif action == 'reset':
+            # Reset Break - tambahkan baris dengan jam reset
+            row = [username, tanggal, jam, '-', '-', '0:00:00', jam, '-']
+            sheet.append_row(row)
+            logger.info(f"✅ Break RESET recorded for {username}")
+            return True
+        
+        return False
+        
+    except Exception as e:
+        logger.error(f"❌ Error saving break to sheet: {e}")
+        return False
 
 # ========== FLASK SERVER ==========
 web_app = Flask(__name__)
@@ -133,8 +243,8 @@ def ping_self():
             logger.error(f"❌ [{now} WIB] Ping error: {e}")
         time.sleep(480)
 
-# ========== GOOGLE SHEETS ==========
-def get_sheet():
+# ========== GOOGLE SHEETS (ORIGINAL) ==========
+def get_sheet_original():
     try:
         SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
         if os.getenv("GOOGLE_CREDENTIALS_JSON"):
@@ -145,7 +255,7 @@ def get_sheet():
             creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
         
         client = gspread.authorize(creds)
-        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        spreadsheet = client.open_by_key("1Fl2YsqEQ7P4lWyesFxKiqZbPq233dPovmXocmn0x_6Y")
         
         all_sheets = spreadsheet.worksheets()
         for sheet in all_sheets:
@@ -186,7 +296,7 @@ def parse_injection_text(text):
 
 def update_spreadsheet_all_data(data, approver_name):
     try:
-        sheet = get_sheet()
+        sheet = get_sheet_original()
         if not sheet:
             return False
         target_row = find_empty_row(sheet)
@@ -424,13 +534,19 @@ def handle_break_out(message):
         break_data[user_id] = {
             'start_time': current_time,
             'total_break': 0,
-            'is_on_break': True
+            'is_on_break': True,
+            'username': username
         }
     else:
         break_data[user_id]['start_time'] = current_time
         break_data[user_id]['is_on_break'] = True
+        break_data[user_id]['username'] = username
     
     save_break_data()
+    
+    # Simpan ke Google Sheets
+    total_break = break_data[user_id].get('total_break', 0)
+    save_break_to_sheet(username, 'out', 0, total_break)
     
     # Kirim pesan sukses
     bot.reply_to(
@@ -438,7 +554,7 @@ def handle_break_out(message):
         f"✅ *ISTIRAHAT DIMULAI*\n\n"
         f"👤 {username}\n"
         f"🕐 Jam keluar: {format_wib(current_time)} WIB\n"
-        f"📊 Total istirahat hari ini: {format_duration(break_data[user_id].get('total_break', 0))}\n\n"
+        f"📊 Total istirahat hari ini: {format_duration(total_break)}\n\n"
         f"Jangan lupa /in untuk kembali masuk.",
         parse_mode='Markdown'
     )
@@ -488,12 +604,15 @@ def handle_break_in(message):
     break_data[user_id]['total_break'] += duration
     break_data[user_id]['is_on_break'] = False
     break_data[user_id]['start_time'] = None
+    break_data[user_id]['username'] = username
     
     save_break_data()
     
-    # Kirim pesan sukses
+    # Simpan ke Google Sheets
     total_break = break_data[user_id]['total_break']
+    save_break_to_sheet(username, 'in', duration, total_break)
     
+    # Kirim pesan sukses
     bot.reply_to(
         message,
         f"✅ *KEMBALI MASUK KERJA*\n\n"
@@ -573,9 +692,13 @@ def handle_reset_break(message):
         break_data[user_id] = {
             'start_time': None,
             'total_break': 0,
-            'is_on_break': False
+            'is_on_break': False,
+            'username': username
         }
         save_break_data()
+        
+        # Simpan reset ke Google Sheets
+        save_break_to_sheet(username, 'reset')
         
         bot.reply_to(
             message,
@@ -957,11 +1080,15 @@ def run_bot():
     logger.info("Starting Telegram Bot...")
     logger.info(f"🕐 WIB Time: {get_wib_time().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    sheet = get_sheet()
-    if sheet:
-        logger.info(f"✅ Google Sheets connected")
-    else:
-        logger.error("❌ Google Sheets FAILED")
+    # Cek koneksi ke Google Sheets
+    try:
+        spreadsheet = get_sheet()
+        if spreadsheet:
+            logger.info(f"✅ Google Sheets connected: {SPREADSHEET_ID}")
+        else:
+            logger.error("❌ Google Sheets FAILED")
+    except Exception as e:
+        logger.error(f"❌ Google Sheets error: {e}")
     
     # Load break data
     load_break_data()
@@ -969,6 +1096,16 @@ def run_bot():
     
     logger.info(f"📍 Break Group ID: {BREAK_GROUP_ID}")
     logger.info(f"📍 Test Group ID: {TEST_GROUP_ID}")
+    
+    # Cek sheet LOG BREAK
+    try:
+        break_sheet = get_break_sheet()
+        if break_sheet:
+            logger.info(f"✅ Break sheet ready: {BREAK_SHEET_NAME}")
+        else:
+            logger.error("❌ Break sheet FAILED")
+    except Exception as e:
+        logger.error(f"❌ Break sheet error: {e}")
     
     bot.polling(none_stop=True, timeout=30)
 
@@ -980,6 +1117,7 @@ if __name__ == "__main__":
     print("🔄 Reset Password: OK (/reset / /RESET / /ReSeT)")
     print("📊 Report: OK (REPORT / Report / report)")
     print("⏰ Break: OK (/out, /in, /status_break, /reset_break)")
+    print("📊 Break Log: OK (Google Sheets - LOG BREAK)")
     print(f"📍 Break Group ID: {BREAK_GROUP_ID}")
     print(f"📍 Test Group ID: {TEST_GROUP_ID}")
     print("🕐 Timezone: WIB (Asia/Jakarta) - Tanpa Install")
