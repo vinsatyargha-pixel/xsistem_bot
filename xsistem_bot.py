@@ -6,13 +6,14 @@ import time
 import requests
 import os
 import threading
-import tempfile  # https://github.com/vinsatyargha-pixel/xsistem_bot/blob/main/xsistem_bot.py
+import tempfile
 from flask import Flask
 import re
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
+import json
 
 # ================= SETUP LOGGING =================
 logging.basicConfig(
@@ -31,6 +32,79 @@ SPREADSHEET_ID = "1Fl2YsqEQ7P4lWyesFxKiqZbPq233dPovmXocmn0x_6Y"
 TARGET_SHEET_NAME = "X"
 
 pending_injections = {}
+
+# ========== BREAK TIME TRACKING ==========
+BREAK_FILE = "break_data.json"
+break_data = {}  # Format: {user_id: {"start_time": datetime, "total_break": seconds, "is_on_break": bool}}
+
+# Load data dari file jika ada
+def load_break_data():
+    global break_data
+    try:
+        if os.path.exists(BREAK_FILE):
+            with open(BREAK_FILE, 'r') as f:
+                data = json.load(f)
+                for user_id, user_data in data.items():
+                    if user_data.get('start_time'):
+                        user_data['start_time'] = datetime.fromisoformat(user_data['start_time'])
+                    break_data[user_id] = user_data
+            logger.info(f"✅ Loaded break data for {len(break_data)} users")
+    except Exception as e:
+        logger.error(f"❌ Error loading break data: {e}")
+
+def save_break_data():
+    try:
+        data_to_save = {}
+        for user_id, user_data in break_data.items():
+            data_to_save[user_id] = {
+                'start_time': user_data['start_time'].isoformat() if user_data.get('start_time') else None,
+                'total_break': user_data.get('total_break', 0),
+                'is_on_break': user_data.get('is_on_break', False)
+            }
+        with open(BREAK_FILE, 'w') as f:
+            json.dump(data_to_save, f, indent=2)
+        logger.info("✅ Break data saved")
+    except Exception as e:
+        logger.error(f"❌ Error saving break data: {e}")
+
+def format_duration(seconds):
+    """Format durasi dalam detik menjadi HH:MM:SS"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    else:
+        return f"{minutes:02d}:{secs:02d}"
+
+# ========== AUTO RESET BREAK DI TENGAH MALAM ==========
+def auto_reset_break_daily():
+    """Reset semua data break pada tengah malam"""
+    while True:
+        now = datetime.now()
+        # Hitung waktu sampai tengah malam berikutnya
+        next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        sleep_seconds = (next_midnight - now).total_seconds()
+        
+        logger.info(f"⏰ Auto-reset break akan terjadi dalam {sleep_seconds/3600:.1f} jam")
+        time.sleep(sleep_seconds)
+        
+        # Reset data
+        global break_data
+        for user_id in break_data:
+            if break_data[user_id].get('is_on_break', False):
+                # Jika user sedang istirahat, hitung durasi sampai tengah malam
+                start_time = break_data[user_id].get('start_time')
+                if start_time:
+                    duration = (datetime.now() - start_time).total_seconds()
+                    break_data[user_id]['total_break'] += duration
+                    break_data[user_id]['is_on_break'] = False
+                    break_data[user_id]['start_time'] = None
+            else:
+                break_data[user_id]['total_break'] = 0
+        
+        save_break_data()
+        logger.info("🔄 Break data telah direset otomatis untuk hari baru")
 
 # ========== FLASK SERVER ==========
 web_app = Flask(__name__)
@@ -311,6 +385,234 @@ def extract_reset_info(text):
     
     return None, None
 
+# ========== BREAK TIME COMMANDS ==========
+@bot.message_handler(commands=['out'])
+def handle_break_out(message):
+    user_id = str(message.from_user.id)
+    username = message.from_user.username or message.from_user.first_name
+    current_time = datetime.now()
+    
+    # Cek apakah user sudah dalam status break
+    if user_id in break_data and break_data[user_id].get('is_on_break', False):
+        bot.reply_to(
+            message,
+            f"⏰ *ANDA SUDAH DALAM STATUS ISTIRAHAT!*\n\n"
+            f"👤 {username}\n"
+            f"🕐 Mulai istirahat: {break_data[user_id]['start_time'].strftime('%H:%M:%S')}\n"
+            f"📊 Total istirahat hari ini: {format_duration(break_data[user_id].get('total_break', 0))}\n\n"
+            f"Gunakan /in untuk kembali masuk kerja.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Catat waktu out
+    if user_id not in break_data:
+        break_data[user_id] = {
+            'start_time': current_time,
+            'total_break': 0,
+            'is_on_break': True
+        }
+    else:
+        break_data[user_id]['start_time'] = current_time
+        break_data[user_id]['is_on_break'] = True
+    
+    save_break_data()
+    
+    # Kirim pesan sukses
+    bot.reply_to(
+        message,
+        f"✅ *ISTIRAHAT DIMULAI*\n\n"
+        f"👤 {username}\n"
+        f"🕐 Jam keluar: {current_time.strftime('%H:%M:%S')}\n"
+        f"📊 Total istirahat hari ini: {format_duration(break_data[user_id].get('total_break', 0))}\n\n"
+        f"Jangan lupa /in untuk kembali masuk.",
+        parse_mode='Markdown'
+    )
+    
+    # Kirim notifikasi ke group
+    try:
+        bot.send_message(
+            GROUP_ID,
+            f"🔴 *ISTIRAHAT*\n"
+            f"👤 {username}\n"
+            f"⏰ Keluar: {current_time.strftime('%H:%M:%S')}",
+            parse_mode='Markdown'
+        )
+    except:
+        pass
+
+@bot.message_handler(commands=['in'])
+def handle_break_in(message):
+    user_id = str(message.from_user.id)
+    username = message.from_user.username or message.from_user.first_name
+    current_time = datetime.now()
+    
+    # Cek apakah user sedang dalam status break
+    if user_id not in break_data or not break_data[user_id].get('is_on_break', False):
+        bot.reply_to(
+            message,
+            f"⚠️ *ANDA TIDAK SEDANG ISTIRAHAT!*\n\n"
+            f"👤 {username}\n"
+            f"Gunakan /out jika ingin mulai istirahat.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Hitung durasi istirahat
+    start_time = break_data[user_id]['start_time']
+    duration = (current_time - start_time).total_seconds()
+    
+    # Update total break
+    if 'total_break' not in break_data[user_id]:
+        break_data[user_id]['total_break'] = 0
+    break_data[user_id]['total_break'] += duration
+    break_data[user_id]['is_on_break'] = False
+    break_data[user_id]['start_time'] = None
+    
+    save_break_data()
+    
+    # Kirim pesan sukses
+    total_break = break_data[user_id]['total_break']
+    
+    bot.reply_to(
+        message,
+        f"✅ *KEMBALI MASUK KERJA*\n\n"
+        f"👤 {username}\n"
+        f"🕐 Jam masuk: {current_time.strftime('%H:%M:%S')}\n"
+        f"⏱️ Durasi istirahat: {format_duration(duration)}\n"
+        f"📊 Total istirahat hari ini: {format_duration(total_break)}\n\n"
+        f"💪 Semangat bekerja!",
+        parse_mode='Markdown'
+    )
+    
+    # Kirim notifikasi ke group
+    try:
+        bot.send_message(
+            GROUP_ID,
+            f"🟢 *KEMBALI KERJA*\n"
+            f"👤 {username}\n"
+            f"⏰ Masuk: {current_time.strftime('%H:%M:%S')}\n"
+            f"⏱️ Durasi istirahat: {format_duration(duration)}",
+            parse_mode='Markdown'
+        )
+    except:
+        pass
+
+@bot.message_handler(commands=['status_break'])
+def handle_break_status(message):
+    """Cek status istirahat user tertentu (hanya untuk admin)"""
+    if message.from_user.username not in ADMIN_USERNAMES:
+        bot.reply_to(message, "❌ Maaf, hanya admin yang bisa menggunakan command ini.")
+        return
+    
+    # Cek jika ada mention atau reply
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
+        user_id = str(target_user.id)
+        username = target_user.username or target_user.first_name
+    else:
+        # Cek jika ada parameter
+        args = message.text.split()
+        if len(args) > 1:
+            # Coba cari user berdasarkan username
+            target_username = args[1].replace('@', '')
+            for uid, data in break_data.items():
+                try:
+                    user = bot.get_chat(uid)
+                    if user.username == target_username:
+                        user_id = uid
+                        username = user.username or user.first_name
+                        break
+                except:
+                    continue
+            else:
+                bot.reply_to(message, "❌ User tidak ditemukan.")
+                return
+        else:
+            bot.reply_to(message, "❌ Reply atau mention user yang ingin dicek statusnya.")
+            return
+    
+    # Tampilkan status
+    if user_id in break_data:
+        data = break_data[user_id]
+        is_break = data.get('is_on_break', False)
+        total_break = data.get('total_break', 0)
+        start_time = data.get('start_time')
+        
+        status_text = (
+            f"📊 *STATUS ISTIRAHAT*\n\n"
+            f"👤 {username}\n"
+            f"🔹 Status: {'🔴 ISTIRAHAT' if is_break else '🟢 BEKERJA'}\n"
+            f"📊 Total istirahat: {format_duration(total_break)}"
+        )
+        
+        if is_break and start_time:
+            duration = (datetime.now() - start_time).total_seconds()
+            status_text += f"\n⏱️ Durasi saat ini: {format_duration(duration)}"
+            status_text += f"\n🕐 Mulai istirahat: {start_time.strftime('%H:%M:%S')}"
+        
+        bot.reply_to(message, status_text, parse_mode='Markdown')
+    else:
+        bot.reply_to(
+            message,
+            f"📊 *STATUS ISTIRAHAT*\n\n"
+            f"👤 {username}\n"
+            f"🔹 Status: 🟢 BEKERJA (belum pernah istirahat hari ini)",
+            parse_mode='Markdown'
+        )
+
+@bot.message_handler(commands=['reset_break'])
+def handle_reset_break(message):
+    """Reset total break user (hanya untuk admin)"""
+    if message.from_user.username not in ADMIN_USERNAMES:
+        bot.reply_to(message, "❌ Maaf, hanya admin yang bisa menggunakan command ini.")
+        return
+    
+    # Cek jika ada mention atau reply
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
+        user_id = str(target_user.id)
+        username = target_user.username or target_user.first_name
+    else:
+        args = message.text.split()
+        if len(args) > 1:
+            target_username = args[1].replace('@', '')
+            for uid, data in break_data.items():
+                try:
+                    user = bot.get_chat(uid)
+                    if user.username == target_username:
+                        user_id = uid
+                        username = user.username or user.first_name
+                        break
+                except:
+                    continue
+            else:
+                bot.reply_to(message, "❌ User tidak ditemukan.")
+                return
+        else:
+            bot.reply_to(message, "❌ Reply atau mention user yang ingin direset break-nya.")
+            return
+    
+    # Reset data
+    if user_id in break_data:
+        break_data[user_id] = {
+            'start_time': None,
+            'total_break': 0,
+            'is_on_break': False
+        }
+        save_break_data()
+        
+        bot.reply_to(
+            message,
+            f"✅ *RESET BREAK*\n\n"
+            f"👤 {username}\n"
+            f"Total break telah direset ke 0.\n"
+            f"Status: 🟢 BEKERJA",
+            parse_mode='Markdown'
+        )
+    else:
+        bot.reply_to(message, f"❌ User {username} tidak memiliki data break.")
+
 # ========== HANDLER FOTO (GABUNGAN SEMUA - CASE INSENSITIVE) ==========
 @bot.message_handler(content_types=['photo'])
 def handle_photo_with_caption(message):
@@ -358,7 +660,7 @@ def handle_photo_with_caption(message):
                        'REPORT KODE UNIK', 'REPORT BALANCING BANK']
     for keyword in report_keywords:
         if keyword in caption_upper:
-            logger.info(f"   → Detected: REPORT")
+            logger.info("   → Detected: REPORT")
             handle_report_from_caption(caption, message)
             return
     
@@ -683,6 +985,15 @@ def run_bot():
         logger.info(f"✅ Google Sheets connected")
     else:
         logger.error("❌ Google Sheets FAILED")
+    
+    # Load break data
+    load_break_data()
+    logger.info(f"✅ Loaded break data for {len(break_data)} users")
+    
+    # Start auto-reset thread
+    reset_thread = threading.Thread(target=auto_reset_break_daily, daemon=True)
+    reset_thread.start()
+    
     bot.polling(none_stop=True, timeout=30)
 
 if __name__ == "__main__":
@@ -692,6 +1003,7 @@ if __name__ == "__main__":
     print("💉 Suntik Bank: OK (tolong suntik / TOLONG SUNTIK / ToLong SunTik)")
     print("🔄 Reset: OK (/reset / /RESET / /ReSeT)")
     print("📊 Report: OK (REPORT / Report / report)")
+    print("⏰ Break: OK (/out, /in, /status_break, /reset_break)")
     print("=" * 60)
     
     flask_thread = threading.Thread(target=run_flask, daemon=True)
