@@ -27,8 +27,9 @@ TOKEN = "8087735462:AAGII-XvO3hJy3YgDd3b0vjiIHjnQCn4Ej4"
 bot = telebot.TeleBot(TOKEN)
 
 ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]
-GROUP_ID = -1003855148883
-BREAK_GROUP_ID = -1004431538452  # ID grup untuk break time
+GROUP_ID = -1003855148883  # Grup utama (suntik WD)
+BREAK_GROUP_ID = -1004431538452  # Grup break produksi
+TEST_GROUP_ID = -1001234567890  # GANTI DENGAN ID GRUP TEST KAMU!
 SPREADSHEET_ID = "1Fl2YsqEQ7P4lWyesFxKiqZbPq233dPovmXocmn0x_6Y"
 TARGET_SHEET_NAME = "X"
 
@@ -78,12 +79,11 @@ def format_duration(seconds):
     else:
         return f"{minutes:02d}:{secs:02d}"
 
-def is_break_group(message):
-    """Cek apakah pesan berasal dari grup break yang ditentukan"""
+def is_break_allowed_group(message):
+    """Cek apakah pesan berasal dari grup break atau grup test"""
     if message.chat.type == 'private':
-        # Kalo di private chat, tetep bisa pake (opsional)
-        return True
-    return message.chat.id == BREAK_GROUP_ID
+        return True  # Private chat selalu boleh
+    return message.chat.id in [BREAK_GROUP_ID, TEST_GROUP_ID]
 
 # ========== FLASK SERVER ==========
 web_app = Flask(__name__)
@@ -364,12 +364,12 @@ def extract_reset_info(text):
     
     return None, None
 
-# ========== BREAK TIME COMMANDS (HANYA DI GRUP TERTENTU) ==========
+# ========== BREAK TIME COMMANDS ==========
 @bot.message_handler(commands=['out'])
 def handle_break_out(message):
-    # CEK APAKAH DI GRUP YANG DITENTUKAN ATAU PRIVATE CHAT
-    if message.chat.type != 'private' and message.chat.id != BREAK_GROUP_ID:
-        bot.reply_to(message, "❌ Command /out hanya bisa digunakan di grup break khusus!")
+    # CEK APAKAH DI GRUP YANG DIIZINKAN (TEST ATAU PRODUKSI) ATAU PRIVATE CHAT
+    if message.chat.type != 'private' and message.chat.id not in [BREAK_GROUP_ID, TEST_GROUP_ID]:
+        bot.reply_to(message, "❌ Command /out hanya bisa digunakan di grup break atau grup test!")
         return
     
     user_id = str(message.from_user.id)
@@ -413,10 +413,11 @@ def handle_break_out(message):
         parse_mode='Markdown'
     )
     
-    # Kirim notifikasi ke group utama (opsional)
+    # Kirim notifikasi ke grup yang sesuai
     try:
+        target_group = TEST_GROUP_ID if message.chat.id == TEST_GROUP_ID else BREAK_GROUP_ID
         bot.send_message(
-            GROUP_ID,
+            target_group,
             f"🔴 *ISTIRAHAT*\n"
             f"👤 {username}\n"
             f"⏰ Keluar: {current_time.strftime('%H:%M:%S')}",
@@ -427,9 +428,9 @@ def handle_break_out(message):
 
 @bot.message_handler(commands=['in'])
 def handle_break_in(message):
-    # CEK APAKAH DI GRUP YANG DITENTUKAN ATAU PRIVATE CHAT
-    if message.chat.type != 'private' and message.chat.id != BREAK_GROUP_ID:
-        bot.reply_to(message, "❌ Command /in hanya bisa digunakan di grup break khusus!")
+    # CEK APAKAH DI GRUP YANG DIIZINKAN (TEST ATAU PRODUKSI) ATAU PRIVATE CHAT
+    if message.chat.type != 'private' and message.chat.id not in [BREAK_GROUP_ID, TEST_GROUP_ID]:
+        bot.reply_to(message, "❌ Command /in hanya bisa digunakan di grup break atau grup test!")
         return
     
     user_id = str(message.from_user.id)
@@ -474,10 +475,11 @@ def handle_break_in(message):
         parse_mode='Markdown'
     )
     
-    # Kirim notifikasi ke group utama (opsional)
+    # Kirim notifikasi ke grup yang sesuai
     try:
+        target_group = TEST_GROUP_ID if message.chat.id == TEST_GROUP_ID else BREAK_GROUP_ID
         bot.send_message(
-            GROUP_ID,
+            target_group,
             f"🟢 *KEMBALI KERJA*\n"
             f"👤 {username}\n"
             f"⏰ Masuk: {current_time.strftime('%H:%M:%S')}\n"
@@ -601,6 +603,24 @@ def handle_reset_break(message):
         )
     else:
         bot.reply_to(message, f"❌ User {username} tidak memiliki data break.")
+
+# ========== COMMAND UNTUK CEK ID GRUP ==========
+@bot.message_handler(commands=['id'])
+def handle_get_id(message):
+    """Command untuk mendapatkan ID grup/chat"""
+    chat_id = message.chat.id
+    chat_type = message.chat.type
+    chat_title = message.chat.title if hasattr(message.chat, 'title') else "Private Chat"
+    
+    bot.reply_to(
+        message,
+        f"📊 *INFO CHAT*\n\n"
+        f"📌 Title: {chat_title}\n"
+        f"🆔 ID: `{chat_id}`\n"
+        f"📂 Type: {chat_type}\n\n"
+        f"Gunakan ID ini untuk konfigurasi bot.",
+        parse_mode='Markdown'
+    )
 
 # ========== HANDLER FOTO (GABUNGAN SEMUA - CASE INSENSITIVE) ==========
 @bot.message_handler(content_types=['photo'])
@@ -979,6 +999,9 @@ def run_bot():
     load_break_data()
     logger.info(f"✅ Loaded break data for {len(break_data)} users")
     
+    logger.info(f"📍 Break Group ID: {BREAK_GROUP_ID}")
+    logger.info(f"📍 Test Group ID: {TEST_GROUP_ID}")
+    
     bot.polling(none_stop=True, timeout=30)
 
 if __name__ == "__main__":
@@ -990,6 +1013,9 @@ if __name__ == "__main__":
     print("📊 Report: OK (REPORT / Report / report)")
     print("⏰ Break: OK (/out, /in, /status_break, /reset_break)")
     print(f"📍 Break Group ID: {BREAK_GROUP_ID}")
+    print(f"📍 Test Group ID: {TEST_GROUP_ID}")
+    print("=" * 60)
+    print("📝 TIPS: Gunakan /id di grup untuk mendapatkan ID grup")
     print("=" * 60)
     
     flask_thread = threading.Thread(target=run_flask, daemon=True)
