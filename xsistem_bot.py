@@ -12,9 +12,9 @@ import re
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import logging
 import json
-import pytz
 
 # ================= SETUP LOGGING =================
 logging.basicConfig(
@@ -34,8 +34,8 @@ TEST_GROUP_ID = -1001234567890  # GANTI DENGAN ID GRUP TEST KAMU!
 SPREADSHEET_ID = "1Fl2YsqEQ7P4lWyesFxKiqZbPq233dPovmXocmn0x_6Y"
 TARGET_SHEET_NAME = "X"
 
-# ========== TIMEZONE INDONESIA (WIB) ==========
-WIB = pytz.timezone('Asia/Jakarta')
+# ========== TIMEZONE INDONESIA (WIB) - TANPA INSTALL ==========
+WIB = ZoneInfo('Asia/Jakarta')
 
 def get_wib_time():
     """Mendapatkan waktu sekarang dalam WIB"""
@@ -63,7 +63,7 @@ def load_break_data():
                         # Parse string ke datetime dengan timezone WIB
                         dt = datetime.fromisoformat(user_data['start_time'])
                         if dt.tzinfo is None:
-                            dt = WIB.localize(dt)
+                            dt = dt.replace(tzinfo=WIB)
                         user_data['start_time'] = dt
                     break_data[user_id] = user_data
             logger.info(f"✅ Loaded break data for {len(break_data)} users")
@@ -982,7 +982,7 @@ if __name__ == "__main__":
     print("⏰ Break: OK (/out, /in, /status_break, /reset_break)")
     print(f"📍 Break Group ID: {BREAK_GROUP_ID}")
     print(f"📍 Test Group ID: {TEST_GROUP_ID}")
-    print("🕐 Timezone: WIB (Asia/Jakarta)")
+    print("🕐 Timezone: WIB (Asia/Jakarta) - Tanpa Install")
     print("=" * 60)
     print("📝 TIPS: Gunakan /id di grup untuk mendapatkan ID grup")
     print("=" * 60)
