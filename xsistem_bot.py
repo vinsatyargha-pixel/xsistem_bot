@@ -679,16 +679,31 @@ def handle_break_status(message):
 
 @bot.message_handler(commands=['reset_break'])
 def handle_reset_break(message):
-    """Reset total break user yang ngetik (hanya untuk admin)"""
-    if message.from_user.username not in ADMIN_USERNAMES:
-        bot.reply_to(message, "❌ Maaf, hanya admin yang bisa menggunakan command ini.")
-        return
+    """Reset total break user yang ngetik (SEMUA USER BISA)"""
+    # HAPUS pengecekan admin!
+    # if message.from_user.username not in ADMIN_USERNAMES:
+    #     bot.reply_to(message, "❌ Maaf, hanya admin yang bisa menggunakan command ini.")
+    #     return
     
     user_id = str(message.from_user.id)
     username = message.from_user.username or message.from_user.first_name
     
     # Cek apakah user punya data break
     if user_id in break_data:
+        # Cek apakah user sedang dalam status break
+        if break_data[user_id].get('is_on_break', False):
+            bot.reply_to(
+                message,
+                f"⚠️ *TIDAK BISA RESET SAAT ISTIRAHAT!*\n\n"
+                f"👤 {username}\n"
+                f"Anda sedang dalam status istirahat.\n"
+                f"Gunakan /in terlebih dahulu untuk kembali bekerja,\n"
+                f"baru kemudian gunakan /reset_break.",
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Reset data break
         break_data[user_id] = {
             'start_time': None,
             'total_break': 0,
@@ -708,8 +723,38 @@ def handle_reset_break(message):
             f"Status: 🟢 MULAI BARU",
             parse_mode='Markdown'
         )
+        
+        # Kirim notifikasi ke grup
+        try:
+            target_group = TEST_GROUP_ID if message.chat.id == TEST_GROUP_ID else BREAK_GROUP_ID
+            bot.send_message(
+                target_group,
+                f"🔄 *RESET BREAK*\n"
+                f"👤 {username}\n"
+                f"Total break direset ke 0",
+                parse_mode='Markdown'
+            )
+        except:
+            pass
     else:
-        bot.reply_to(message, f"❌ {username}, Anda tidak memiliki data break.")
+        # User belum pernah break, buat data baru dengan total 0
+        break_data[user_id] = {
+            'start_time': None,
+            'total_break': 0,
+            'is_on_break': False,
+            'username': username
+        }
+        save_break_data()
+        
+        bot.reply_to(
+            message,
+            f"✅ *RESET BREAK*\n\n"
+            f"👤 {username}\n"
+            f"Data break telah dibuat.\n"
+            f"Total break: 0\n"
+            f"Status: 🟢 MULAI BARU",
+            parse_mode='Markdown'
+        )
 
 # ========== HANDLER FOTO (GABUNGAN SEMUA - CASE INSENSITIVE) ==========
 @bot.message_handler(content_types=['photo'])
