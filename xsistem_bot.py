@@ -14,6 +14,7 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
 import logging
 import json
+import pytz
 
 # ================= SETUP LOGGING =================
 logging.basicConfig(
@@ -33,6 +34,17 @@ TEST_GROUP_ID = -1001234567890  # GANTI DENGAN ID GRUP TEST KAMU!
 SPREADSHEET_ID = "1Fl2YsqEQ7P4lWyesFxKiqZbPq233dPovmXocmn0x_6Y"
 TARGET_SHEET_NAME = "X"
 
+# ========== TIMEZONE INDONESIA (WIB) ==========
+WIB = pytz.timezone('Asia/Jakarta')
+
+def get_wib_time():
+    """Mendapatkan waktu sekarang dalam WIB"""
+    return datetime.now(WIB)
+
+def format_wib(dt):
+    """Format datetime ke string WIB"""
+    return dt.strftime('%H:%M:%S')
+
 pending_injections = {}
 
 # ========== BREAK TIME TRACKING ==========
@@ -48,7 +60,11 @@ def load_break_data():
                 data = json.load(f)
                 for user_id, user_data in data.items():
                     if user_data.get('start_time'):
-                        user_data['start_time'] = datetime.fromisoformat(user_data['start_time'])
+                        # Parse string ke datetime dengan timezone WIB
+                        dt = datetime.fromisoformat(user_data['start_time'])
+                        if dt.tzinfo is None:
+                            dt = WIB.localize(dt)
+                        user_data['start_time'] = dt
                     break_data[user_id] = user_data
             logger.info(f"✅ Loaded break data for {len(break_data)} users")
     except Exception as e:
@@ -79,12 +95,6 @@ def format_duration(seconds):
     else:
         return f"{minutes:02d}:{secs:02d}"
 
-def is_break_allowed_group(message):
-    """Cek apakah pesan berasal dari grup break atau grup test"""
-    if message.chat.type == 'private':
-        return True  # Private chat selalu boleh
-    return message.chat.id in [BREAK_GROUP_ID, TEST_GROUP_ID]
-
 # ========== FLASK SERVER ==========
 web_app = Flask(__name__)
 
@@ -113,13 +123,14 @@ def ping_self():
         try:
             url = "https://cek-rekening-fi8f.onrender.com"
             response = requests.get(url + "/ping", timeout=10)
-            now = time.strftime("%H:%M:%S")
+            now = get_wib_time().strftime('%H:%M:%S')
             if response.status_code == 200:
-                logger.info(f"✅ [{now}] Ping successful")
+                logger.info(f"✅ [{now} WIB] Ping successful")
             else:
-                logger.warning(f"⚠️ [{now}] Ping failed")
+                logger.warning(f"⚠️ [{now} WIB] Ping failed")
         except Exception as e:
-            logger.error(f"❌ [{now}] Ping error: {e}")
+            now = get_wib_time().strftime('%H:%M:%S')
+            logger.error(f"❌ [{now} WIB] Ping error: {e}")
         time.sleep(480)
 
 # ========== GOOGLE SHEETS ==========
@@ -364,25 +375,44 @@ def extract_reset_info(text):
     
     return None, None
 
+# ========== COMMAND UNTUK CEK ID GRUP ==========
+@bot.message_handler(commands=['id'])
+def handle_get_id(message):
+    """Command untuk mendapatkan ID grup/chat"""
+    chat_id = message.chat.id
+    chat_type = message.chat.type
+    chat_title = message.chat.title if hasattr(message.chat, 'title') else "Private Chat"
+    
+    bot.reply_to(
+        message,
+        f"📊 *INFO CHAT*\n\n"
+        f"📌 Title: {chat_title}\n"
+        f"🆔 ID: `{chat_id}`\n"
+        f"📂 Type: {chat_type}\n\n"
+        f"Gunakan ID ini untuk konfigurasi bot.",
+        parse_mode='Markdown'
+    )
+
 # ========== BREAK TIME COMMANDS ==========
 @bot.message_handler(commands=['out'])
 def handle_break_out(message):
-    # CEK APAKAH DI GRUP YANG DIIZINKAN (TEST ATAU PRODUKSI) ATAU PRIVATE CHAT
+    # CEK APAKAH DI GRUP YANG DIIZINKAN ATAU PRIVATE CHAT
     if message.chat.type != 'private' and message.chat.id not in [BREAK_GROUP_ID, TEST_GROUP_ID]:
         bot.reply_to(message, "❌ Command /out hanya bisa digunakan di grup break atau grup test!")
         return
     
     user_id = str(message.from_user.id)
     username = message.from_user.username or message.from_user.first_name
-    current_time = datetime.now()
+    current_time = get_wib_time()  # PAKAI WIB
     
     # Cek apakah user sudah dalam status break
     if user_id in break_data and break_data[user_id].get('is_on_break', False):
+        start = break_data[user_id]['start_time']
         bot.reply_to(
             message,
             f"⏰ *ANDA SUDAH DALAM STATUS ISTIRAHAT!*\n\n"
             f"👤 {username}\n"
-            f"🕐 Mulai istirahat: {break_data[user_id]['start_time'].strftime('%H:%M:%S')}\n"
+            f"🕐 Mulai istirahat: {format_wib(start)}\n"
             f"📊 Total istirahat hari ini: {format_duration(break_data[user_id].get('total_break', 0))}\n\n"
             f"Gunakan /in untuk kembali masuk kerja.",
             parse_mode='Markdown'
@@ -407,7 +437,7 @@ def handle_break_out(message):
         message,
         f"✅ *ISTIRAHAT DIMULAI*\n\n"
         f"👤 {username}\n"
-        f"🕐 Jam keluar: {current_time.strftime('%H:%M:%S')}\n"
+        f"🕐 Jam keluar: {format_wib(current_time)} WIB\n"
         f"📊 Total istirahat hari ini: {format_duration(break_data[user_id].get('total_break', 0))}\n\n"
         f"Jangan lupa /in untuk kembali masuk.",
         parse_mode='Markdown'
@@ -420,7 +450,7 @@ def handle_break_out(message):
             target_group,
             f"🔴 *ISTIRAHAT*\n"
             f"👤 {username}\n"
-            f"⏰ Keluar: {current_time.strftime('%H:%M:%S')}",
+            f"⏰ Keluar: {format_wib(current_time)} WIB",
             parse_mode='Markdown'
         )
     except:
@@ -428,14 +458,14 @@ def handle_break_out(message):
 
 @bot.message_handler(commands=['in'])
 def handle_break_in(message):
-    # CEK APAKAH DI GRUP YANG DIIZINKAN (TEST ATAU PRODUKSI) ATAU PRIVATE CHAT
+    # CEK APAKAH DI GRUP YANG DIIZINKAN ATAU PRIVATE CHAT
     if message.chat.type != 'private' and message.chat.id not in [BREAK_GROUP_ID, TEST_GROUP_ID]:
         bot.reply_to(message, "❌ Command /in hanya bisa digunakan di grup break atau grup test!")
         return
     
     user_id = str(message.from_user.id)
     username = message.from_user.username or message.from_user.first_name
-    current_time = datetime.now()
+    current_time = get_wib_time()  # PAKAI WIB
     
     # Cek apakah user sedang dalam status break
     if user_id not in break_data or not break_data[user_id].get('is_on_break', False):
@@ -468,7 +498,7 @@ def handle_break_in(message):
         message,
         f"✅ *KEMBALI MASUK KERJA*\n\n"
         f"👤 {username}\n"
-        f"🕐 Jam masuk: {current_time.strftime('%H:%M:%S')}\n"
+        f"🕐 Jam masuk: {format_wib(current_time)} WIB\n"
         f"⏱️ Durasi istirahat: {format_duration(duration)}\n"
         f"📊 Total istirahat hari ini: {format_duration(total_break)}\n\n"
         f"💪 Semangat bekerja!",
@@ -482,7 +512,7 @@ def handle_break_in(message):
             target_group,
             f"🟢 *KEMBALI KERJA*\n"
             f"👤 {username}\n"
-            f"⏰ Masuk: {current_time.strftime('%H:%M:%S')}\n"
+            f"⏰ Masuk: {format_wib(current_time)} WIB\n"
             f"⏱️ Durasi istirahat: {format_duration(duration)}",
             parse_mode='Markdown'
         )
@@ -491,39 +521,15 @@ def handle_break_in(message):
 
 @bot.message_handler(commands=['status_break'])
 def handle_break_status(message):
-    """Cek status istirahat user tertentu (hanya untuk admin)"""
+    """Cek status istirahat user (hanya untuk admin)"""
     if message.from_user.username not in ADMIN_USERNAMES:
         bot.reply_to(message, "❌ Maaf, hanya admin yang bisa menggunakan command ini.")
         return
     
-    # Cek jika ada mention atau reply
-    if message.reply_to_message:
-        target_user = message.reply_to_message.from_user
-        user_id = str(target_user.id)
-        username = target_user.username or target_user.first_name
-    else:
-        # Cek jika ada parameter
-        args = message.text.split()
-        if len(args) > 1:
-            # Coba cari user berdasarkan username
-            target_username = args[1].replace('@', '')
-            for uid, data in break_data.items():
-                try:
-                    user = bot.get_chat(uid)
-                    if user.username == target_username:
-                        user_id = uid
-                        username = user.username or user.first_name
-                        break
-                except:
-                    continue
-            else:
-                bot.reply_to(message, "❌ User tidak ditemukan.")
-                return
-        else:
-            bot.reply_to(message, "❌ Reply atau mention user yang ingin dicek statusnya.")
-            return
+    user_id = str(message.from_user.id)
+    username = message.from_user.username or message.from_user.first_name
     
-    # Tampilkan status
+    # Tampilkan status user yang ngetik
     if user_id in break_data:
         data = break_data[user_id]
         is_break = data.get('is_on_break', False)
@@ -538,9 +544,9 @@ def handle_break_status(message):
         )
         
         if is_break and start_time:
-            duration = (datetime.now() - start_time).total_seconds()
+            duration = (get_wib_time() - start_time).total_seconds()
             status_text += f"\n⏱️ Durasi saat ini: {format_duration(duration)}"
-            status_text += f"\n🕐 Mulai istirahat: {start_time.strftime('%H:%M:%S')}"
+            status_text += f"\n🕐 Mulai istirahat: {format_wib(start_time)} WIB"
         
         bot.reply_to(message, status_text, parse_mode='Markdown')
     else:
@@ -554,37 +560,15 @@ def handle_break_status(message):
 
 @bot.message_handler(commands=['reset_break'])
 def handle_reset_break(message):
-    """Reset total break user (hanya untuk admin)"""
+    """Reset total break user yang ngetik (hanya untuk admin)"""
     if message.from_user.username not in ADMIN_USERNAMES:
         bot.reply_to(message, "❌ Maaf, hanya admin yang bisa menggunakan command ini.")
         return
     
-    # Cek jika ada mention atau reply
-    if message.reply_to_message:
-        target_user = message.reply_to_message.from_user
-        user_id = str(target_user.id)
-        username = target_user.username or target_user.first_name
-    else:
-        args = message.text.split()
-        if len(args) > 1:
-            target_username = args[1].replace('@', '')
-            for uid, data in break_data.items():
-                try:
-                    user = bot.get_chat(uid)
-                    if user.username == target_username:
-                        user_id = uid
-                        username = user.username or user.first_name
-                        break
-                except:
-                    continue
-            else:
-                bot.reply_to(message, "❌ User tidak ditemukan.")
-                return
-        else:
-            bot.reply_to(message, "❌ Reply atau mention user yang ingin direset break-nya.")
-            return
+    user_id = str(message.from_user.id)
+    username = message.from_user.username or message.from_user.first_name
     
-    # Reset data
+    # Cek apakah user punya data break
     if user_id in break_data:
         break_data[user_id] = {
             'start_time': None,
@@ -602,25 +586,7 @@ def handle_reset_break(message):
             parse_mode='Markdown'
         )
     else:
-        bot.reply_to(message, f"❌ User {username} tidak memiliki data break.")
-
-# ========== COMMAND UNTUK CEK ID GRUP ==========
-@bot.message_handler(commands=['id'])
-def handle_get_id(message):
-    """Command untuk mendapatkan ID grup/chat"""
-    chat_id = message.chat.id
-    chat_type = message.chat.type
-    chat_title = message.chat.title if hasattr(message.chat, 'title') else "Private Chat"
-    
-    bot.reply_to(
-        message,
-        f"📊 *INFO CHAT*\n\n"
-        f"📌 Title: {chat_title}\n"
-        f"🆔 ID: `{chat_id}`\n"
-        f"📂 Type: {chat_type}\n\n"
-        f"Gunakan ID ini untuk konfigurasi bot.",
-        parse_mode='Markdown'
-    )
+        bot.reply_to(message, f"❌ {username}, Anda tidak memiliki data break.")
 
 # ========== HANDLER FOTO (GABUNGAN SEMUA - CASE INSENSITIVE) ==========
 @bot.message_handler(content_types=['photo'])
@@ -989,6 +955,8 @@ def ignore_other_media(message):
 # ========== BOT RUNNER ==========
 def run_bot():
     logger.info("Starting Telegram Bot...")
+    logger.info(f"🕐 WIB Time: {get_wib_time().strftime('%Y-%m-%d %H:%M:%S')}")
+    
     sheet = get_sheet()
     if sheet:
         logger.info(f"✅ Google Sheets connected")
@@ -1009,11 +977,12 @@ if __name__ == "__main__":
     print("🤖 X-SISTEM BOT - CASE INSENSITIVE")
     print("=" * 60)
     print("💉 Suntik Bank: OK (tolong suntik / TOLONG SUNTIK / ToLong SunTik)")
-    print("🔄 Reset: OK (/reset / /RESET / /ReSeT)")
+    print("🔄 Reset Password: OK (/reset / /RESET / /ReSeT)")
     print("📊 Report: OK (REPORT / Report / report)")
     print("⏰ Break: OK (/out, /in, /status_break, /reset_break)")
     print(f"📍 Break Group ID: {BREAK_GROUP_ID}")
     print(f"📍 Test Group ID: {TEST_GROUP_ID}")
+    print("🕐 Timezone: WIB (Asia/Jakarta)")
     print("=" * 60)
     print("📝 TIPS: Gunakan /id di grup untuk mendapatkan ID grup")
     print("=" * 60)
