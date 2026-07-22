@@ -28,6 +28,7 @@ bot = telebot.TeleBot(TOKEN)
 
 ADMIN_USERNAMES = ["Vingeance", "bangjoshh"]
 GROUP_ID = -1003855148883
+BREAK_GROUP_ID = -1004431538452  # ID grup untuk break time
 SPREADSHEET_ID = "1Fl2YsqEQ7P4lWyesFxKiqZbPq233dPovmXocmn0x_6Y"
 TARGET_SHEET_NAME = "X"
 
@@ -76,6 +77,13 @@ def format_duration(seconds):
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
     else:
         return f"{minutes:02d}:{secs:02d}"
+
+def is_break_group(message):
+    """Cek apakah pesan berasal dari grup break yang ditentukan"""
+    if message.chat.type == 'private':
+        # Kalo di private chat, tetep bisa pake (opsional)
+        return True
+    return message.chat.id == BREAK_GROUP_ID
 
 # ========== FLASK SERVER ==========
 web_app = Flask(__name__)
@@ -356,9 +364,14 @@ def extract_reset_info(text):
     
     return None, None
 
-# ========== BREAK TIME COMMANDS ==========
+# ========== BREAK TIME COMMANDS (HANYA DI GRUP TERTENTU) ==========
 @bot.message_handler(commands=['out'])
 def handle_break_out(message):
+    # CEK APAKAH DI GRUP YANG DITENTUKAN ATAU PRIVATE CHAT
+    if message.chat.type != 'private' and message.chat.id != BREAK_GROUP_ID:
+        bot.reply_to(message, "❌ Command /out hanya bisa digunakan di grup break khusus!")
+        return
+    
     user_id = str(message.from_user.id)
     username = message.from_user.username or message.from_user.first_name
     current_time = datetime.now()
@@ -400,7 +413,7 @@ def handle_break_out(message):
         parse_mode='Markdown'
     )
     
-    # Kirim notifikasi ke group
+    # Kirim notifikasi ke group utama (opsional)
     try:
         bot.send_message(
             GROUP_ID,
@@ -414,6 +427,11 @@ def handle_break_out(message):
 
 @bot.message_handler(commands=['in'])
 def handle_break_in(message):
+    # CEK APAKAH DI GRUP YANG DITENTUKAN ATAU PRIVATE CHAT
+    if message.chat.type != 'private' and message.chat.id != BREAK_GROUP_ID:
+        bot.reply_to(message, "❌ Command /in hanya bisa digunakan di grup break khusus!")
+        return
+    
     user_id = str(message.from_user.id)
     username = message.from_user.username or message.from_user.first_name
     current_time = datetime.now()
@@ -456,7 +474,7 @@ def handle_break_in(message):
         parse_mode='Markdown'
     )
     
-    # Kirim notifikasi ke group
+    # Kirim notifikasi ke group utama (opsional)
     try:
         bot.send_message(
             GROUP_ID,
@@ -971,6 +989,7 @@ if __name__ == "__main__":
     print("🔄 Reset: OK (/reset / /RESET / /ReSeT)")
     print("📊 Report: OK (REPORT / Report / report)")
     print("⏰ Break: OK (/out, /in, /status_break, /reset_break)")
+    print(f"📍 Break Group ID: {BREAK_GROUP_ID}")
     print("=" * 60)
     
     flask_thread = threading.Thread(target=run_flask, daemon=True)
