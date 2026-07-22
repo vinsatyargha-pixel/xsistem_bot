@@ -77,35 +77,6 @@ def format_duration(seconds):
     else:
         return f"{minutes:02d}:{secs:02d}"
 
-# ========== AUTO RESET BREAK DI TENGAH MALAM ==========
-def auto_reset_break_daily():
-    """Reset semua data break pada tengah malam"""
-    while True:
-        now = datetime.now()
-        # Hitung waktu sampai tengah malam berikutnya
-        next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        sleep_seconds = (next_midnight - now).total_seconds()
-        
-        logger.info(f"⏰ Auto-reset break akan terjadi dalam {sleep_seconds/3600:.1f} jam")
-        time.sleep(sleep_seconds)
-        
-        # Reset data
-        global break_data
-        for user_id in break_data:
-            if break_data[user_id].get('is_on_break', False):
-                # Jika user sedang istirahat, hitung durasi sampai tengah malam
-                start_time = break_data[user_id].get('start_time')
-                if start_time:
-                    duration = (datetime.now() - start_time).total_seconds()
-                    break_data[user_id]['total_break'] += duration
-                    break_data[user_id]['is_on_break'] = False
-                    break_data[user_id]['start_time'] = None
-            else:
-                break_data[user_id]['total_break'] = 0
-        
-        save_break_data()
-        logger.info("🔄 Break data telah direset otomatis untuk hari baru")
-
 # ========== FLASK SERVER ==========
 web_app = Flask(__name__)
 
@@ -989,10 +960,6 @@ def run_bot():
     # Load break data
     load_break_data()
     logger.info(f"✅ Loaded break data for {len(break_data)} users")
-    
-    # Start auto-reset thread
-    reset_thread = threading.Thread(target=auto_reset_break_daily, daemon=True)
-    reset_thread.start()
     
     bot.polling(none_stop=True, timeout=30)
 
