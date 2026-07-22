@@ -582,7 +582,7 @@ def handle_reset_break(message):
             f"✅ *RESET BREAK*\n\n"
             f"👤 {username}\n"
             f"Total break telah direset ke 0.\n"
-            f"Status: 🟢 BEKERJA",
+            f"Status: 🟢 MULAI BARU",
             parse_mode='Markdown'
         )
     else:
